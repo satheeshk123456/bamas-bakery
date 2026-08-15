@@ -1,0 +1,62 @@
+{
+  "_comment": "Sample content so the app isn't empty on first run. Upload the matching images from assets/images/ to Firebase Storage, copy their download URLs, then add these documents in Firestore (or use the admin panel's Add Item / Add Category forms instead of doing this by hand).",
+
+  "shopSettings/main": {
+    "isOpen": true,
+    "shopName": "Bamas Burger",
+    "logoUrl": "REPLACE_WITH_STORAGE_URL_FOR_logo.png",
+    "gpayQrUrl": "REPLACE_WITH_STORAGE_URL_FOR_gpay_qr_placeholder.png",
+    "upiId": "yourshop@upi",
+    "contactPhone": "+91XXXXXXXXXX"
+  },
+
+  "categories": [
+    { "name": "Burgers", "imageUrl": "REPLACE_WITH_STORAGE_URL_FOR_category_burgers.png", "sortOrder": 1 },
+    { "name": "Fries & Sides", "imageUrl": "REPLACE_WITH_STORAGE_URL_FOR_category_fries.png", "sortOrder": 2 },
+    { "name": "Drinks", "imageUrl": "REPLACE_WITH_STORAGE_URL_FOR_category_drinks.png", "sortOrder": 3 },
+    { "name": "Combos", "imageUrl": "REPLACE_WITH_STORAGE_URL_FOR_category_combos.png", "sortOrder": 4 }
+  ],
+
+  "menuItems": [
+    {
+      "name": "Classic Beef Burger",
+      "description": "Grilled patty, cheddar, lettuce, house sauce.",
+      "price": 120,
+      "imageUrl": "REPLACE_WITH_STORAGE_URL_FOR_sample_burger.png",
+      "categoryName": "Burgers",
+      "isAvailable": true,
+      "rating": 4.6,
+      "sortOrder": 1
+    },
+    {
+      "name": "Spicy Chicken Burger",
+      "description": "Crispy chicken fillet, spicy mayo, pickles.",
+      "price": 130,
+      "imageUrl": "REPLACE_WITH_STORAGE_URL_FOR_sample_burger.png",
+      "categoryName": "Burgers",
+      "isAvailable": true,
+      "rating": 4.5,
+      "sortOrder": 2
+    },
+    {
+      "name": "Peri Peri Fries",
+      "description": "Crispy fries tossed in peri peri seasoning.",
+      "price": 80,
+      "imageUrl": "REPLACE_WITH_STORAGE_URL_FOR_sample_fries.png",
+      "categoryName": "Fries & Sides",
+      "isAvailable": true,
+      "rating": 4.4,
+      "sortOrder": 1
+    },
+    {
+      "name": "Cold Coke",
+      "description": "Chilled 300ml bottle.",
+      "price": 40,
+      "imageUrl": "REPLACE_WITH_STORAGE_URL_FOR_sample_drink.png",
+      "categoryName": "Drinks",
+      "isAvailable": true,
+      "rating": 4.7,
+      "sortOrder": 1
+    }
+  ]
+}

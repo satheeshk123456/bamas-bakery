@@ -1,0 +1,67 @@
+rules_version = '2';
+
+// Simple, deliberately permissive-for-customers / locked-for-writes model:
+//  - Anyone (including the app running as an anonymous / no-auth guest)
+//    can READ the menu, categories and shop settings, and CREATE an order.
+//  - Only a signed-in admin (checked via the `admins` collection) can
+//    write menu/category/settings data or change an order's status.
+//  - A customer can update ONLY their own order's `paymentMethod` /
+//    `paymentConfirmedByCustomer` fields (not status, not totals).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false; // manage admin accounts manually in the console
+    }
+
+    match /shopSettings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /categories/{catId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /menuItems/{itemId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Reviews: public to read and to leave, but nobody can edit an
+    // existing one. Only an admin can delete (spam removal).
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if request.resource.data.rating is number
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.comment.size() < 1000;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Enquiries: a customer can send one, but only admins can read them —
+    // they contain other customers' names and phone numbers.
+    match /enquiries/{enquiryId} {
+      allow read: if isAdmin();
+      allow create: if request.resource.data.message.size() < 2000;
+      allow update, delete: if isAdmin();
+    }
+
+    match /orders/{orderId} {
+      allow read: if true; // order id acts as the access token from the app's side
+      allow create: if request.resource.data.status == 'pending';
+      allow update: if isAdmin() ||
+        (request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['paymentMethod', 'paymentConfirmedByCustomer', 'updatedAt']));
+      allow delete: if isAdmin();
+    }
+  }
+}

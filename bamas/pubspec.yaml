@@ -1,0 +1,44 @@
+name: bamas
+description: "Bamas Burger Shop - customer ordering app."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # --- Firebase ---
+  firebase_core: ^3.6.0
+  cloud_firestore: ^5.4.4
+  firebase_storage: ^12.3.4
+  firebase_messaging: ^15.1.3
+
+  # --- State management ---
+  provider: ^6.1.2
+
+  # --- Location (captures customer delivery location for admin) ---
+  geolocator: ^13.0.1
+  geocoding: ^3.0.0
+
+  # --- UI / UX helpers ---
+  cached_network_image: ^3.4.1
+  flutter_local_notifications: ^18.0.1
+  url_launcher: ^6.3.1
+  shared_preferences: ^2.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/

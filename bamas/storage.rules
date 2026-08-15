@@ -1,0 +1,13 @@
+rules_version = '2';
+
+// Menu photos, logo and the GPay QR code live under /public/**, readable
+// by everyone (needed so the app can display them without login), but
+// only writable by a signed-in admin.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /public/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}

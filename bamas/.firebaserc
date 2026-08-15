@@ -1,0 +1,12 @@
+{
+  "projects": {
+    "default": "REPLACE_WITH_YOUR_FIREBASE_PROJECT_ID"
+  },
+  "targets": {
+    "REPLACE_WITH_YOUR_FIREBASE_PROJECT_ID": {
+      "hosting": {
+        "admin": ["REPLACE_WITH_YOUR_FIREBASE_PROJECT_ID-admin"]
+      }
+    }
+  }
+}
