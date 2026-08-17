@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The logo artwork is drawn on white, so the adaptive icon sits on a
+         white plate. Change this if the client ever wants a coloured tile. -->
+    <color name="ic_launcher_background">#FFFFFF</color>
+</resources>

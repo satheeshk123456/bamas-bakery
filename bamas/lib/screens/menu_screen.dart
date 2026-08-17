@@ -4,11 +4,20 @@ import '../models/category.dart';
 import '../models/menu_item.dart';
 import '../services/firestore_service.dart';
 import '../widgets/menu_item_card.dart';
+import '../widgets/mini_cart_bar.dart';
+import 'cart_screen.dart';
 
 /// Full menu with category filter chips across the top.
 class MenuScreen extends StatefulWidget {
   final bool embedded;
-  const MenuScreen({super.key, this.embedded = false});
+
+  /// Called when the mini cart bar is tapped. When this screen is one of
+  /// the home tabs, pass a callback that switches to the Cart tab; when
+  /// pushed standalone, leave this null and it opens the Cart screen
+  /// directly.
+  final VoidCallback? onViewCart;
+
+  const MenuScreen({super.key, this.embedded = false, this.onViewCart});
 
   @override
   State<MenuScreen> createState() => _MenuScreenState();
@@ -115,6 +124,11 @@ class _MenuScreenState extends State<MenuScreen> {
       ],
     );
 
+    final viewCart = widget.onViewCart ??
+        () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CartScreen()),
+            );
+
     if (widget.embedded) {
       return Column(
         children: [
@@ -127,13 +141,19 @@ class _MenuScreenState extends State<MenuScreen> {
             ),
           ),
           Expanded(child: body),
+          MiniCartBar(onViewCart: viewCart),
         ],
       );
     }
 
     return Scaffold(
       appBar: AppBar(title: const Text('Our Menu')),
-      body: body,
+      body: Column(
+        children: [
+          Expanded(child: body),
+          MiniCartBar(onViewCart: viewCart),
+        ],
+      ),
     );
   }
 }

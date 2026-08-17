@@ -25,11 +25,16 @@ class _HomeScreenState extends State<HomeScreen> {
   int _navIndex = 0;
   final _firestore = FirestoreService();
 
+  static const _cartTabIndex = 3;
+
   @override
   Widget build(BuildContext context) {
     final pages = [
       _HomeTab(firestore: _firestore),
-      const MenuScreen(embedded: true),
+      MenuScreen(
+        embedded: true,
+        onViewCart: () => setState(() => _navIndex = _cartTabIndex),
+      ),
       const EnquiryScreen(embedded: true),
       const CartScreen(embedded: true),
     ];
