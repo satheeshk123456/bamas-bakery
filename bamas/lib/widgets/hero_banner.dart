@@ -5,9 +5,9 @@ import '../models/shop_settings.dart';
 import 'app_image.dart';
 
 /// The dark gradient hero section on the home screen: a time-based
-/// greeting chip, headline, the shop photo with a live rating badge, and
-/// the shop name + tagline. Photo, headline and tagline are all editable
-/// from the admin panel, so the client can restyle this without a rebuild.
+/// greeting chip, headline, the shop photo, and the shop name + tagline.
+/// Photo, headline and tagline are all editable from the admin panel, so
+/// the client can restyle this without a rebuild.
 class HeroBanner extends StatelessWidget {
   final ShopSettings? settings;
   final List<Review> reviews;
@@ -19,12 +19,6 @@ class HeroBanner extends StatelessWidget {
     if (hour < 12) return 'GOOD MORNING';
     if (hour < 17) return 'GOOD AFTERNOON';
     return 'GOOD EVENING';
-  }
-
-  double get _averageRating {
-    if (reviews.isEmpty) return 0;
-    final total = reviews.fold<double>(0, (sum, r) => sum + r.rating);
-    return total / reviews.length;
   }
 
   @override
@@ -85,71 +79,39 @@ class HeroBanner extends StatelessWidget {
           ),
           const SizedBox(height: 18),
 
-          // Shop photo + rating badge
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: AspectRatio(
-                  aspectRatio: 1.45,
-                  child: AppImage(
-                    source: imageUrl,
-                    fallback: Container(
-                      color: Colors.white.withValues(alpha: 0.08),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.storefront,
-                              size: 44,
-                              color: Colors.white.withValues(alpha: 0.5)),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Add a shop photo from\nthe admin panel',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.6),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              if (reviews.isNotEmpty)
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.92),
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+          // Shop photo
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: AspectRatio(
+              aspectRatio: 1.04,
+              child: Container(
+                color: Colors.black,
+                child: AppImage(
+                  source: imageUrl,
+                  fit: BoxFit.cover,
+                  fallback: Container(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.star_rounded,
-                            size: 17, color: Color(0xFFF5A623)),
-                        const SizedBox(width: 5),
+                        Icon(Icons.storefront,
+                            size: 44,
+                            color: Colors.white.withValues(alpha: 0.5)),
+                        const SizedBox(height: 8),
                         Text(
-                          _averageRating.toStringAsFixed(1),
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 13),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          '(${reviews.length} Review${reviews.length == 1 ? '' : 's'})',
-                          style: const TextStyle(
-                              fontSize: 12, color: AppBranding.textMuted),
+                          'Add a shop photo from\nthe admin panel',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.6),
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
                   ),
                 ),
-            ],
+              ),
+            ),
           ),
           const SizedBox(height: 14),
           Text(

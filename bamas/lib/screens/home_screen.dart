@@ -14,7 +14,6 @@ import 'category_screen.dart';
 import 'enquiry_screen.dart';
 import 'menu_screen.dart';
 import 'order_history_screen.dart';
-import 'reviews_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -33,7 +32,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _HomeTab(firestore: _firestore),
       const MenuScreen(embedded: true),
       const EnquiryScreen(embedded: true),
-      const ReviewsScreen(embedded: true),
       const CartScreen(embedded: true),
     ];
 
@@ -57,10 +55,6 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: Icon(Icons.help_outline),
               activeIcon: Icon(Icons.help),
               label: 'Enquiry'),
-          const BottomNavigationBarItem(
-              icon: Icon(Icons.reviews_outlined),
-              activeIcon: Icon(Icons.reviews),
-              label: 'Reviews'),
           BottomNavigationBarItem(
             icon: Consumer<CartProvider>(
               builder: (_, cart, __) => Badge(
