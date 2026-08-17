@@ -15,7 +15,6 @@ class CategoryCard extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        width: 92,
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: Colors.white,

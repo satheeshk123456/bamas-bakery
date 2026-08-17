@@ -8,7 +8,6 @@ import '../services/cart_provider.dart';
 import '../services/firestore_service.dart';
 import '../widgets/category_card.dart';
 import '../widgets/hero_banner.dart';
-import '../widgets/menu_item_card.dart';
 import 'cart_screen.dart';
 import 'category_screen.dart';
 import 'enquiry_screen.dart';
@@ -102,95 +101,56 @@ class _HomeTab extends StatelessWidget {
 
             const SliverToBoxAdapter(child: _MyOrdersCard()),
 
+            // "Chef's Specials" now shows the categories — tap one (e.g.
+            // Burgers) to open that category's own page with its items.
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 22, 16, 10),
-                child: Text('Categories',
-                    style: Theme.of(context).textTheme.titleLarge),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 108,
-                child: StreamBuilder<List<CategoryModel>>(
-                  stream: firestore.categoriesStream(),
-                  builder: (context, snap) {
-                    final categories = snap.data ?? [];
-                    if (!snap.hasData) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (categories.isEmpty) {
-                      return const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: Text(
-                              'No categories yet — add some from the admin panel.'),
-                        ),
-                      );
-                    }
-                    return ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: categories.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 12),
-                      itemBuilder: (context, i) {
-                        final c = categories[i];
-                        return CategoryCard(
-                          category: c,
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => CategoryScreen(category: c),
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 24, 16, 10),
                 child: Text("Chef's Specials",
                     style: Theme.of(context).textTheme.titleLarge),
               ),
             ),
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              sliver: StreamBuilder(
-                stream: firestore.featuredItemsStream(),
+            SliverToBoxAdapter(
+              child: StreamBuilder<List<CategoryModel>>(
+                stream: firestore.categoriesStream(),
                 builder: (context, snap) {
-                  final items = snap.data ?? [];
+                  final categories = snap.data ?? [];
                   if (!snap.hasData) {
-                    return const SliverToBoxAdapter(
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Center(child: CircularProgressIndicator()),
-                      ),
+                    return const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(child: CircularProgressIndicator()),
                     );
                   }
-                  if (items.isEmpty) {
-                    return const SliverToBoxAdapter(
-                      child: Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child:
-                            Text('No items yet — add some from the admin panel.'),
-                      ),
+                  if (categories.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Text(
+                          'No categories yet — add some from the admin panel.'),
                     );
                   }
-                  return SliverGrid(
+                  return GridView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
+                      crossAxisCount: 3,
                       mainAxisSpacing: 14,
-                      crossAxisSpacing: 14,
-                      childAspectRatio: 0.72,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 0.82,
                     ),
-                    delegate: SliverChildBuilderDelegate(
-                      (context, i) => MenuItemCard(item: items[i]),
-                      childCount: items.length,
-                    ),
+                    itemCount: categories.length,
+                    itemBuilder: (context, i) {
+                      final c = categories[i];
+                      return CategoryCard(
+                        category: c,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => CategoryScreen(category: c),
+                          ),
+                        ),
+                      );
+                    },
                   );
                 },
               ),
