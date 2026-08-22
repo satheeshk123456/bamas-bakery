@@ -33,3 +33,16 @@ app.include_router(shop.router)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+    const admin = require("firebase-admin");
+
+// Neenga backend folder-la pota antha json file-oda path
+const serviceAccount = require("./serviceAccountKey.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  // Unga database URL-a inga podanum
+  databaseURL: "https://console.firebase.google.com/u/0/project/bamas-2725a/firestore/databases/-default-/security/rules"
+});
+
+const db = admin.database();
+console.log("Firebase Backend kooda connect aagiduchu!");
