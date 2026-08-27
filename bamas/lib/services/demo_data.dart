@@ -1,6 +1,7 @@
 import 'dart:async';
 import '../models/category.dart';
 import '../models/menu_item.dart';
+import '../models/app_user.dart';
 import '../models/order_model.dart';
 import '../models/review.dart';
 import '../models/shop_settings.dart';
@@ -167,6 +168,9 @@ class DemoStore {
     heroHeadline: 'Your Burger Cravings, Sorted',
     heroTagline: 'Taste the Love, Feel the Quality',
     address: 'Main Road, Your Town — open 11am to 11pm',
+    weekendOfferEnabled: true,
+    weekendOfferText: 'Weekend Special: Flat 20% off on all combos!',
+    weekendOfferImageUrl: '',
   );
 
   // ---------- Reviews ----------
@@ -243,6 +247,7 @@ class DemoStore {
     required String customerName,
     required String customerPhone,
     required String address,
+    String? userId,
   }) {
     _counter++;
     final id = 'demo${_counter.toString().padLeft(3, '0')}xyz';
@@ -254,7 +259,9 @@ class DemoStore {
       customerPhone: customerPhone,
       location: OrderLocation(address: address),
       status: 'pending',
+      userId: userId,
     );
+    _myOrdersController.add(_orders.values.toList().reversed.toList());
 
     // Pretend the shop calls and accepts after 6 seconds, so you can see
     // the GPay / Cash-on-Delivery step without running an admin panel.
@@ -274,8 +281,10 @@ class DemoStore {
       location: o.location,
       status: status,
       paymentMethod: o.paymentMethod,
+      userId: o.userId,
     );
     _controllers[id]?.add(_orders[id]);
+    _myOrdersController.add(_orders.values.toList().reversed.toList());
   }
 
   static void setPaymentMethod(String id, String method) {
@@ -291,14 +300,41 @@ class DemoStore {
       status: o.status,
       paymentMethod: method,
       paymentConfirmedByCustomer: method == 'gpay',
+      userId: o.userId,
     );
     _controllers[id]?.add(_orders[id]);
+    _myOrdersController.add(_orders.values.toList().reversed.toList());
   }
 
   static Stream<OrderModel?> orderStream(String id) {
     final controller = _controllers.putIfAbsent(
         id, () => StreamController<OrderModel?>.broadcast());
     Future.microtask(() => controller.add(_orders[id]));
+    return controller.stream;
+  }
+
+  static final _myOrdersController =
+      StreamController<List<OrderModel>>.broadcast();
+
+  static Stream<List<OrderModel>> myOrdersStream(String uid) {
+    Future.microtask(
+        () => _myOrdersController.add(_orders.values.toList().reversed.toList()));
+    return _myOrdersController.stream;
+  }
+
+  // ---------- User profiles (demo) ----------
+  static final Map<String, AppUser> _profiles = {};
+  static final Map<String, StreamController<AppUser?>> _profileControllers = {};
+
+  static void saveUserProfile(String uid, String name, String phone, String email) {
+    _profiles[uid] = AppUser(uid: uid, name: name, phone: phone, email: email);
+    _profileControllers[uid]?.add(_profiles[uid]);
+  }
+
+  static Stream<AppUser?> userProfileStream(String uid) {
+    final controller = _profileControllers.putIfAbsent(
+        uid, () => StreamController<AppUser?>.broadcast());
+    Future.microtask(() => controller.add(_profiles[uid]));
     return controller.stream;
   }
 

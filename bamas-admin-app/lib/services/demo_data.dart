@@ -1,3 +1,4 @@
+import '../models/category.dart';
 import '../models/menu_item.dart';
 import '../models/order.dart';
 
@@ -81,4 +82,11 @@ List<MenuItem> demoMenuItems() => [
         discountAmount: 5,
         offerLabel: 'Weekend Special',
       ),
+    ];
+
+List<Category> demoCategories() => [
+      Category(id: 'burgers', name: 'Burgers'),
+      Category(id: 'fries', name: 'Fries & Sides'),
+      Category(id: 'drinks', name: 'Drinks'),
+      Category(id: 'combos', name: 'Combos'),
     ];

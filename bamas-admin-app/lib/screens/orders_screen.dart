@@ -5,9 +5,13 @@ import '../models/order.dart';
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
 import '../services/order_service.dart';
+import 'feedback_screen.dart';
 import 'login_screen.dart';
 import 'menu_availability_screen.dart';
+import 'offers_screen.dart';
 import 'order_detail_screen.dart';
+import 'orders_report_screen.dart';
+import 'settings_screen.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
@@ -54,6 +58,16 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
             tooltip: 'Menu: photos, rates & offers',
             onPressed: () => Navigator.of(context)
                 .push(MaterialPageRoute(builder: (_) => const MenuAvailabilityScreen())),
+          ),
+          PopupMenuButton<Widget>(
+            tooltip: 'More',
+            onSelected: (screen) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen)),
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: OrdersReportScreen(), child: Text('Order reports & download')),
+              PopupMenuItem(value: OffersScreen(), child: Text('Offers')),
+              PopupMenuItem(value: FeedbackScreen(), child: Text('Feedback')),
+              PopupMenuItem(value: SettingsScreen(), child: Text('Settings')),
+            ],
           ),
           IconButton(
             icon: const Icon(Icons.logout),

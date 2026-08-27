@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../app_config.dart';
 import '../models/category.dart';
 import '../models/menu_item.dart';
+import '../models/offer.dart';
+import '../models/app_user.dart';
 import '../models/order_model.dart';
 import '../models/review.dart';
 import '../models/shop_settings.dart';
@@ -72,6 +74,19 @@ class FirestoreService {
             snap.docs.map((d) => MenuItem.fromMap(d.id, d.data())).toList());
   }
 
+  // ---------- Offers (home-page promo carousel) ----------
+  // Filtering to isActive happens client-side (not in the query) so this
+  // stays a single-field orderBy -- no composite index needed, unlike
+  // the orders queries that bit this project twice before.
+  Stream<List<OfferModel>> offersStream() {
+    if (kDemoMode) return Stream.value(const []);
+    return _db
+        .collection('offers')
+        .orderBy('sortOrder')
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => OfferModel.fromMap(d.id, d.data())).toList());
+  }
+
   // ---------- Reviews ----------
   Stream<List<Review>> reviewsStream() {
     if (kDemoMode) return DemoStore.reviewsStream();
@@ -121,40 +136,13 @@ class FirestoreService {
   }
 
   // ---------- Orders ----------
-  Future<String> placeOrder({
-    required List<Map<String, dynamic>> items,
-    required double totalAmount,
-    required String customerName,
-    required String customerPhone,
-    required String address,
-    double? lat,
-    double? lng,
-    String? fcmToken,
-  }) async {
-    if (kDemoMode) {
-      return DemoStore.createOrder(
-        items: items,
-        totalAmount: totalAmount,
-        customerName: customerName,
-        customerPhone: customerPhone,
-        address: address,
-      );
-    }
-    final ref = await _db.collection('orders').add({
-      'items': items,
-      'totalAmount': totalAmount,
-      'customerName': customerName,
-      'customerPhone': customerPhone,
-      'location': {'address': address, 'lat': lat, 'lng': lng},
-      'status': 'pending',
-      'paymentMethod': null,
-      'paymentConfirmedByCustomer': false,
-      'fcmToken': fcmToken,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-    return ref.id;
-  }
+  // Placing a NEW order goes through OrderApiService (order_api_service.dart)
+  // instead of straight to Firestore, so bamas-admin-backend can send the
+  // "new order" push in the same request without needing Firebase's paid
+  // Blaze plan. Everything below here — reading an order's live status,
+  // and the customer picking a payment method — still talks to Firestore
+  // directly, since those are just reads/writes the customer's own device
+  // is allowed to do under the Firestore security rules.
 
   Stream<OrderModel?> orderStream(String orderId) {
     if (kDemoMode) return DemoStore.orderStream(orderId);
@@ -162,6 +150,43 @@ class FirestoreService {
       if (!doc.exists) return null;
       return OrderModel.fromMap(doc.id, doc.data()!);
     });
+  }
+
+  // ---------- User profiles ----------
+  Future<void> saveUserProfile({
+    required String uid,
+    required String name,
+    required String phone,
+    required String email,
+  }) async {
+    if (kDemoMode) {
+      DemoStore.saveUserProfile(uid, name, phone, email);
+      return;
+    }
+    await _db.collection('users').doc(uid).set({
+      'name': name,
+      'phone': phone,
+      'email': email,
+      'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Stream<AppUser?> userProfileStream(String uid) {
+    if (kDemoMode) return DemoStore.userProfileStream(uid);
+    return _db.collection('users').doc(uid).snapshots().map(
+        (doc) => doc.exists ? AppUser.fromMap(doc.id, doc.data()!) : null);
+  }
+
+  // ---------- My orders (the logged-in user's own order history) ----------
+  Stream<List<OrderModel>> myOrdersStream(String uid) {
+    if (kDemoMode) return DemoStore.myOrdersStream(uid);
+    return _db
+        .collection('orders')
+        .where('userId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => OrderModel.fromMap(d.id, d.data())).toList());
   }
 
   Future<void> setPaymentMethod(String orderId, String method) async {

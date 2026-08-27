@@ -53,5 +53,13 @@
             <action android:name="android.intent.action.DIAL"/>
             <data android:scheme="tel"/>
         </intent>
+        <!-- Lets checkout open the wa.me WhatsApp link to notify the shop
+             of a new order. Without this, canLaunchUrl() for an https://
+             link returns false on Android 11+ due to package visibility
+             restrictions, even with WhatsApp installed. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
     </queries>
 </manifest>

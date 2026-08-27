@@ -26,7 +26,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     try {
       await orderService.updateStatus(widget.orderId, status);
       if (!mounted) return;
-      setState(() => _future = orderService.getOrder(widget.orderId));
+      setState(() {
+        _future = orderService.getOrder(widget.orderId);
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Order marked as $status. The customer is notified automatically.')),
       );

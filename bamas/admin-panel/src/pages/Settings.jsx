@@ -20,6 +20,9 @@ export default function Settings() {
           gpayQrUrl: '',
           upiId: '',
           contactPhone: '',
+          weekendOfferEnabled: false,
+          weekendOfferText: '',
+          weekendOfferImageUrl: '',
         },
       );
     });
@@ -130,6 +133,49 @@ export default function Settings() {
               if (!file) return;
               const url = await uploadFile(file, 'hero');
               save({ heroImageUrl: url });
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 24 }}>
+        <h2>Weekend offer</h2>
+        <p className="muted">
+          Turn this on to show a promo banner on the customer app's home screen. Turn it off any time — changes
+          appear instantly, no app update needed.
+        </p>
+        <label className="switch large">
+          <input
+            type="checkbox"
+            checked={!!settings.weekendOfferEnabled}
+            onChange={(e) => save({ weekendOfferEnabled: e.target.checked })}
+          />
+          <span className="slider" />
+        </label>
+        <span style={{ marginLeft: 12, fontWeight: 600 }}>
+          {settings.weekendOfferEnabled ? 'On — showing in the app' : 'Off — hidden in the app'}
+        </span>
+
+        <label style={{ marginTop: 16, display: 'block' }}>Offer message</label>
+        <input
+          placeholder="e.g. Weekend Special: Flat 20% off on all combos!"
+          defaultValue={settings.weekendOfferText || ''}
+          onBlur={(e) => save({ weekendOfferText: e.target.value })}
+        />
+
+        <label>Offer photo (optional)</label>
+        <div className="upload-row">
+          {settings.weekendOfferImageUrl && (
+            <img src={settings.weekendOfferImageUrl} alt="weekend offer" className="preview-img" />
+          )}
+          <input
+            type="file"
+            accept="image/*"
+            onChange={async (e) => {
+              const file = e.target.files[0];
+              if (!file) return;
+              const url = await uploadFile(file, 'weekend_offer');
+              save({ weekendOfferImageUrl: url });
             }}
           />
         </div>

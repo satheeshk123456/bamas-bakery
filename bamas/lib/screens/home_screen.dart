@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../app_theme.dart';
 import '../models/category.dart';
+import '../models/offer.dart';
 import '../models/review.dart';
 import '../models/shop_settings.dart';
 import '../services/cart_provider.dart';
 import '../services/firestore_service.dart';
 import '../widgets/category_card.dart';
 import '../widgets/hero_banner.dart';
+import '../widgets/offers_carousel.dart';
+import '../widgets/weekend_offer_banner.dart';
+import 'account_screen.dart';
 import 'cart_screen.dart';
 import 'category_screen.dart';
 import 'enquiry_screen.dart';
@@ -101,6 +105,24 @@ class _HomeTab extends StatelessWidget {
                   settings: settings,
                   reviews: reviewSnap.data ?? const [],
                 ),
+              ),
+            ),
+
+            if (settings?.weekendOfferEnabled ?? false)
+              SliverToBoxAdapter(
+                child: WeekendOfferBanner(
+                  text: settings?.weekendOfferText ?? '',
+                  imageUrl: settings?.weekendOfferImageUrl ?? '',
+                ),
+              ),
+
+            // Admin-controlled promo carousel -- shows nothing when there
+            // are no active offers, so this is a no-op until the admin
+            // adds one from the Offers screen.
+            SliverToBoxAdapter(
+              child: StreamBuilder<List<OfferModel>>(
+                stream: firestore.offersStream(),
+                builder: (context, offersSnap) => OffersCarousel(offers: offersSnap.data ?? const []),
               ),
             ),
 
@@ -219,6 +241,14 @@ class _Header extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
                 ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            IconButton(
+              icon: const Icon(Icons.person_outline, color: AppBranding.textDark),
+              tooltip: 'My Account',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AccountScreen()),
               ),
             ),
           ],

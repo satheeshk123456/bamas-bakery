@@ -1,11 +1,13 @@
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from firebase_admin import auth as fb_auth
 from jose import JWTError, jwt
 
 from .config import settings
+from .firebase_client import get_firebase_app
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
@@ -30,6 +32,28 @@ def create_access_token(subject: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_expires_minutes)
     payload = {"sub": subject, "exp": expire}
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
+
+
+def get_current_customer_uid(authorization: str | None = Header(None)) -> str:
+    """Verifies the Firebase ID token a signed-in customer sends as
+    `Authorization: Bearer <idToken>`. This is completely separate from
+    get_current_admin below -- customers authenticate via Firebase Auth
+    (through /account/register and /account/login), shop admins via this
+    backend's own username/password + JWT."""
+    unauthorized = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired session, please log in again.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise unauthorized
+    token = authorization.split(" ", 1)[1]
+    get_firebase_app()  # make sure the Admin SDK is initialised before use
+    try:
+        decoded = fb_auth.verify_id_token(token)
+    except Exception:
+        raise unauthorized
+    return decoded["uid"]
 
 
 def get_current_admin(token: str = Depends(oauth2_scheme)) -> str:

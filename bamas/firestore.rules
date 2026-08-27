@@ -20,6 +20,17 @@ service cloud.firestore {
       allow write: if false; // manage admin accounts manually in the console
     }
 
+    // Account profiles (name/phone/email) are entirely backend-mediated
+    // now: bamas-admin-backend's /account/* endpoints read and write
+    // this collection using the Admin SDK, which bypasses these rules
+    // completely. The app itself never reads or writes `users/*`
+    // directly, so this stays fully locked down — Firestore already
+    // denies anything with no matching rule, this just says so
+    // explicitly for whoever reads this file next.
+    match /users/{uid} {
+      allow read, write: if false;
+    }
+
     match /shopSettings/{docId} {
       allow read: if true;
       allow write: if isAdmin();
@@ -31,6 +42,15 @@ service cloud.firestore {
     }
 
     match /menuItems/{itemId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Home-page promo banners (carousel). Public to read -- same pattern
+    // as categories/menuItems -- and admin-only to write (in practice
+    // always written by bamas-admin-backend's Admin SDK, which bypasses
+    // these rules entirely; this just documents/future-proofs it).
+    match /offers/{offerId} {
       allow read: if true;
       allow write: if isAdmin();
     }

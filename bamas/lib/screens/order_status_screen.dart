@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../app_theme.dart';
 import '../models/order_model.dart';
@@ -8,10 +9,10 @@ import '../widgets/app_image.dart';
 import 'home_screen.dart';
 
 /// Shows live order status. Once the admin marks the order "accepted",
-/// this screen reveals the GPay QR code (uploaded by the admin) and lets
-/// the customer choose GPay or Cash on Delivery — matching the flow the
+/// this screen reveals the payment QR code (uploaded by the admin) so the
+/// customer can pay online via UPI, card, or QR — matching the flow the
 /// client described: submit order -> admin calls to confirm -> accept ->
-/// customer pays.
+/// customer pays online.
 class OrderStatusScreen extends StatelessWidget {
   final String orderId;
   const OrderStatusScreen({super.key, required this.orderId});
@@ -56,7 +57,13 @@ class OrderStatusScreen extends StatelessWidget {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('${it['name']} x${it['quantity']}'),
+                        Expanded(
+                          child: Text(
+                            '${it['name']} x${it['quantity']}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         Text('₹${(it['price'] * it['quantity']).toStringAsFixed(0)}'),
                       ],
                     ),
@@ -96,7 +103,12 @@ class _StatusTracker extends StatelessWidget {
         children: const [
           Icon(Icons.cancel, color: AppBranding.danger),
           SizedBox(width: 8),
-          Text('Order could not be confirmed', style: TextStyle(color: AppBranding.danger, fontWeight: FontWeight.bold)),
+          Expanded(
+            child: Text(
+              'Order could not be confirmed',
+              style: TextStyle(color: AppBranding.danger, fontWeight: FontWeight.bold),
+            ),
+          ),
         ],
       );
     }
@@ -232,29 +244,23 @@ class _PaymentCardState extends State<_PaymentCard> {
             children: [
               Icon(Icons.check_circle, color: AppBranding.success, size: 20),
               SizedBox(width: 8),
-              Text('Order confirmed! How would you like to pay?', style: TextStyle(fontWeight: FontWeight.bold)),
+              Expanded(
+                child: Text(
+                  'Order confirmed! How would you like to pay?',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
           if (method == null) ...[
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _saving ? null : () => _choose('gpay'),
-                    icon: const Icon(Icons.qr_code),
-                    label: const Text('Pay via GPay'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _saving ? null : () => _choose('cod'),
-                    icon: const Icon(Icons.payments_outlined),
-                    label: const Text('Cash on Delivery'),
-                  ),
-                ),
-              ],
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _saving ? null : () => _choose('gpay'),
+                icon: const Icon(Icons.qr_code),
+                label: const Text('Pay Online (UPI / Card / QR)'),
+              ),
             ),
           ] else if (method == 'gpay') ...[
             StreamBuilder<ShopSettings>(
@@ -262,6 +268,68 @@ class _PaymentCardState extends State<_PaymentCard> {
               builder: (context, snap) {
                 final qrUrl = snap.data?.gpayQrUrl ?? '';
                 final upiId = snap.data?.upiId ?? '';
+                final shopName = (snap.data?.shopName.isNotEmpty ?? false) ? snap.data!.shopName : "the shop";
+
+                // A UPI ID lets us build a proper "upi://pay?...&am=<exact
+                // total>" link and turn THAT into the QR, generated right
+                // here on the phone -- no payment gateway, no network
+                // call. Any UPI app (GPay, PhonePe, Paytm...) that scans
+                // it pre-fills the correct amount automatically, so
+                // nobody has to type it in (or risk typing it wrong).
+                // Falls back to the admin's plain uploaded QR photo if no
+                // UPI ID has been set yet -- that one can't carry an
+                // amount, since it's just a picture.
+                if (upiId.isNotEmpty) {
+                  final upiUri = Uri(
+                    scheme: 'upi',
+                    host: 'pay',
+                    queryParameters: {
+                      'pa': upiId,
+                      'pn': shopName,
+                      'am': widget.order.totalAmount.toStringAsFixed(2),
+                      'cu': 'INR',
+                      'tn': 'Order ${widget.orderId.substring(0, 6).toUpperCase()}',
+                    },
+                  );
+                  return Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: Colors.grey.shade200),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: QrImageView(
+                          data: upiUri.toString(),
+                          size: 210,
+                          backgroundColor: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        '₹${widget.order.totalAmount.toStringAsFixed(0)} to $upiId',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () => launchUrl(upiUri, mode: LaunchMode.externalApplication),
+                          icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
+                          label: const Text('Pay with a UPI app on this phone'),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        "Scan the QR with another phone, or tap the button above to pay from this one — the amount is already filled in. Then show the payment confirmation to our delivery person.",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: AppBranding.textMuted, fontSize: 12.5),
+                      ),
+                    ],
+                  );
+                }
+
                 return Column(
                   children: [
                     ClipRRect(
@@ -276,15 +344,13 @@ class _PaymentCardState extends State<_PaymentCard> {
                             alignment: Alignment.center,
                             padding: const EdgeInsets.all(16),
                             child: const Text(
-                              'QR code not uploaded yet — please pay Cash on Delivery, or ask the shop for the UPI ID.',
+                              'QR code not uploaded yet — please ask the shop for the UPI ID.',
                               textAlign: TextAlign.center,
                             ),
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    if (upiId.isNotEmpty) Text('UPI ID: $upiId', style: const TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 10),
                     const Text(
                       "Scan and pay the exact order total, then show the payment confirmation to our delivery person.",
@@ -294,14 +360,6 @@ class _PaymentCardState extends State<_PaymentCard> {
                   ],
                 );
               },
-            ),
-          ] else if (method == 'cod') ...[
-            const Row(
-              children: [
-                Icon(Icons.payments_outlined, color: AppBranding.textDark),
-                SizedBox(width: 8),
-                Expanded(child: Text("You'll pay cash when your order arrives.")),
-              ],
             ),
           ],
           const SizedBox(height: 8),

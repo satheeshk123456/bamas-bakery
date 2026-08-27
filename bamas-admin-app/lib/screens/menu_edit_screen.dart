@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -68,6 +69,16 @@ class _MenuEditScreenState extends State<MenuEditScreen> {
     Widget child;
     if (_pickedImageFile != null) {
       child = Image.file(_pickedImageFile!, fit: BoxFit.cover);
+    } else if (_imageUrl != null && _imageUrl!.startsWith('data:')) {
+      // Base64 straight in Firestore (see app/image_utils.py on the
+      // backend) -- not a network URL or a real file on this device.
+      final url = _imageUrl!;
+      try {
+        final bytes = base64Decode(url.substring(url.indexOf(',') + 1));
+        child = Image.memory(bytes, fit: BoxFit.cover);
+      } catch (_) {
+        child = const Icon(Icons.broken_image_outlined, size: 48, color: AppBranding.textMuted);
+      }
     } else if (_imageUrl != null && _imageUrl!.startsWith('http')) {
       child = Image.network(
         _imageUrl!,

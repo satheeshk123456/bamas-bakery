@@ -1,8 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import '../models/menu_item.dart';
 import '../services/menu_service.dart';
+import 'category_add_screen.dart';
+import 'menu_add_screen.dart';
 import 'menu_edit_screen.dart';
 
 /// Menu tab: toggle items sold-out, and edit each item's photo, price
@@ -31,16 +34,27 @@ class _MenuAvailabilityScreenState extends State<MenuAvailabilityScreen> {
 
   Widget _thumbnail(MenuItem item) {
     Widget child;
-    if (item.imageUrl == null || item.imageUrl!.isEmpty) {
+    final url = item.imageUrl;
+    if (url == null || url.isEmpty) {
       child = const Icon(Icons.fastfood_outlined, color: AppBranding.textMuted);
-    } else if (item.imageUrl!.startsWith('http')) {
+    } else if (url.startsWith('data:')) {
+      // Uploaded via this app -- base64 straight in Firestore, not a
+      // network URL or a real file on this device (see app/image_utils.py
+      // on the backend for why: Firebase Storage now needs the paid
+      // Blaze plan just to create a bucket).
+      try {
+        child = Image.memory(base64Decode(url.substring(url.indexOf(',') + 1)), fit: BoxFit.cover);
+      } catch (_) {
+        child = const Icon(Icons.broken_image_outlined, color: AppBranding.textMuted);
+      }
+    } else if (url.startsWith('http')) {
       child = Image.network(
-        item.imageUrl!,
+        url,
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: AppBranding.textMuted),
       );
     } else {
-      child = Image.file(File(item.imageUrl!), fit: BoxFit.cover);
+      child = Image.file(File(url), fit: BoxFit.cover);
     }
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
@@ -51,7 +65,29 @@ class _MenuAvailabilityScreenState extends State<MenuAvailabilityScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Menu')),
+      appBar: AppBar(
+        title: const Text('Menu'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.category_outlined),
+            tooltip: 'Add new category',
+            onPressed: () async {
+              await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CategoryAddScreen()));
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline),
+            tooltip: 'Add new item',
+            onPressed: () async {
+              final added = await Navigator.of(context)
+                  .push<MenuItem>(MaterialPageRoute(builder: (_) => const MenuAddScreen()));
+              if (added != null) {
+                await _refresh();
+              }
+            },
+          ),
+        ],
+      ),
       body: FutureBuilder<List<MenuItem>>(
         future: _future,
         builder: (context, snapshot) {

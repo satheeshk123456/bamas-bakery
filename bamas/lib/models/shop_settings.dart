@@ -14,6 +14,14 @@ class ShopSettings {
   final String heroTagline;
   final String address;
 
+  /// Weekend offer banner (home screen). Fully admin-controlled: the
+  /// on/off switch, the message, and an optional photo are all set from
+  /// the admin panel's Settings page, so the client can run (and stop) a
+  /// weekend promo without an app update.
+  final bool weekendOfferEnabled;
+  final String weekendOfferText;
+  final String weekendOfferImageUrl;
+
   ShopSettings({
     required this.isOpen,
     required this.shopName,
@@ -25,6 +33,9 @@ class ShopSettings {
     this.heroHeadline = 'Your Burger Cravings, Sorted',
     this.heroTagline = 'Taste the Love, Feel the Quality',
     this.address = '',
+    this.weekendOfferEnabled = false,
+    this.weekendOfferText = '',
+    this.weekendOfferImageUrl = '',
   });
 
   factory ShopSettings.fromMap(Map<String, dynamic>? map) {
@@ -53,6 +64,9 @@ class ShopSettings {
           ? map['heroTagline']
           : 'Taste the Love, Feel the Quality',
       address: map['address'] ?? '',
+      weekendOfferEnabled: map['weekendOfferEnabled'] ?? false,
+      weekendOfferText: map['weekendOfferText'] ?? '',
+      weekendOfferImageUrl: map['weekendOfferImageUrl'] ?? '',
     );
   }
 }

@@ -1,13 +1,8 @@
-// PLACEHOLDER — replace this whole file by running `flutterfire configure`
-// from this project's root (bamas admin/) and picking the SAME Firebase
-// project the customer app (bamas/) already uses, selecting Android when
-// asked which platforms. This registers a second Android app in that
-// project (package: com.bamasburgerbox.admin) and overwrites this file
-// with the real keys — no manual copying needed. See ../README.md.
-//
-// This app only uses Firebase for push notifications (FCM), so you do not
-// need to touch Firestore/Storage/Auth setup again — that's already done
-// for the bamas project.
+// Real values for Android, copied from the "bamas" Firebase project
+// (project bamas-13c73) via console.firebase.google.com ->
+// com.bamasburgerbox.admin -> google-services.json. Same Firebase
+// project as the customer app (bamas/), registered as a second Android
+// app so this app can use FCM push notifications.
 
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, TargetPlatform;
@@ -29,10 +24,10 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'REPLACE_ME',
-    appId: 'REPLACE_ME',
-    messagingSenderId: 'REPLACE_ME',
-    projectId: 'REPLACE_ME',
-    storageBucket: 'REPLACE_ME',
+    apiKey: 'AIzaSyD7LvfUbHf64lrReAuPt83wgpu4MYPETVA',
+    appId: '1:594458332820:android:b999f9bf654d7ce4fc2e81',
+    messagingSenderId: '594458332820',
+    projectId: 'bamas-13c73',
+    storageBucket: 'bamas-13c73.firebasestorage.app',
   );
 }

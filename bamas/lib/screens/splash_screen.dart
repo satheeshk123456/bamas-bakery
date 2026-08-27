@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import '../app_theme.dart';
-import 'home_screen.dart';
+import 'auth_gate.dart';
 
 /// Plays the shop's splash video full-screen on launch, then hands off to
 /// the home screen. If the video can't load for any reason (missing asset,
@@ -73,8 +73,11 @@ class _SplashScreenState extends State<SplashScreen> {
   void _goHome() {
     if (_navigated || !mounted) return;
     _navigated = true;
+    // Hands off to AuthGate rather than HomeScreen directly — login is
+    // required app-wide, so AuthGate decides whether that means the
+    // login screen or the home screen.
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      MaterialPageRoute(builder: (_) => const AuthGate()),
     );
   }
 
@@ -91,25 +94,24 @@ class _SplashScreenState extends State<SplashScreen> {
     final ready = controller != null && controller.value.isInitialized;
 
     return Scaffold(
-      // White background (not full-bleed black) so the video reads as a
-      // smaller, centered piece of the splash rather than filling the
-      // whole screen.
       backgroundColor: Colors.white,
-      body: Center(
-        child: (ready && !_videoFailed)
-            ? ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 220),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: AspectRatio(
-                    aspectRatio:
-                        controller.value.size.width / controller.value.size.height,
-                    child: VideoPlayer(controller),
-                  ),
+      body: (ready && !_videoFailed)
+          // Fills the entire screen edge-to-edge — FittedBox+cover scales
+          // the video up to match whichever dimension (width or height)
+          // is smaller, then crops the overflow on the other axis, so
+          // there's no visible background around it and no letterboxing
+          // bars, regardless of the phone's exact aspect ratio.
+          ? SizedBox.expand(
+              child: FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: controller.value.size.width,
+                  height: controller.value.size.height,
+                  child: VideoPlayer(controller),
                 ),
-              )
-            : const _LogoFallback(),
-      ),
+              ),
+            )
+          : const _LogoFallback(),
     );
   }
 }

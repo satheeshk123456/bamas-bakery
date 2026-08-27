@@ -5,7 +5,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.12.2
+  sdk: ^3.11.5
 
 dependencies:
   flutter:
@@ -18,6 +18,12 @@ dependencies:
   cloud_firestore: ^5.4.4
   firebase_storage: ^12.3.4
   firebase_messaging: ^15.1.3
+  firebase_auth: ^5.3.1
+
+  # --- Talks to bamas-admin-backend to place a new order (so the "new
+  # order" notification can be sent without needing Firebase's paid
+  # Blaze plan / Cloud Functions) ---
+  http: ^1.2.2
 
   # --- State management ---
   provider: ^6.1.2
@@ -32,6 +38,10 @@ dependencies:
   url_launcher: ^6.3.1
   shared_preferences: ^2.3.3
   video_player: ^2.9.2
+
+  # --- Generates the UPI payment QR (with the exact order amount
+  # baked in) entirely on-device -- no payment gateway, no network call ---
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:

@@ -37,6 +37,7 @@ class OrderModel {
   final String? paymentMethod; // gpay | cod | null
   final bool paymentConfirmedByCustomer;
   final String? fcmToken;
+  final String? userId;
   final Timestamp? createdAt;
 
   OrderModel({
@@ -50,6 +51,7 @@ class OrderModel {
     this.paymentMethod,
     this.paymentConfirmedByCustomer = false,
     this.fcmToken,
+    this.userId,
     this.createdAt,
   });
 
@@ -65,7 +67,28 @@ class OrderModel {
       paymentMethod: map['paymentMethod'],
       paymentConfirmedByCustomer: map['paymentConfirmedByCustomer'] ?? false,
       fcmToken: map['fcmToken'],
-      createdAt: map['createdAt'],
+      userId: map['userId'],
+      createdAt: _parseTimestamp(map['createdAt']),
     );
+  }
+
+  /// Orders reach this model from two different sources: the native
+  /// Firestore SDK (admin/demo streams), which hands back a real
+  /// [Timestamp], and the bamas-admin-backend HTTP API
+  /// (GET /account/orders), which JSON-serialises the same field as an
+  /// ISO8601 string via Python's `.isoformat()`. Assigning that string
+  /// straight into a `Timestamp?` field used to throw a runtime
+  /// TypeError the moment an order came back over HTTP (the server
+  /// logs looked perfectly clean -- 200 OK -- because the failure only
+  /// happened afterwards, on-device, while decoding the response) --
+  /// this normalises either shape instead of assuming one.
+  static Timestamp? _parseTimestamp(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value;
+    if (value is String) {
+      final parsed = DateTime.tryParse(value);
+      if (parsed != null) return Timestamp.fromDate(parsed);
+    }
+    return null;
   }
 }

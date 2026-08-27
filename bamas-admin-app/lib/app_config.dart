@@ -4,11 +4,12 @@
 ///          Good for checking every screen before the FastAPI backend and
 ///          Firebase are wired up.
 /// false -> the app talks to the real bamas-admin-backend FastAPI server.
-const bool kDemoMode = true;
+///
+/// Set to false: the backend is deployed and reachable at kApiBaseUrl
+/// below, and Firebase is configured (firebase_options.dart has real
+/// keys) — so there's no reason to stay on fake data anymore.
+const bool kDemoMode = false;
 
-/// Base URL of the bamas-admin-backend FastAPI server. See
-/// bamas-admin-backend/README.md for how to run it and which URL to use:
-///  - Android emulator talking to a server on your own PC -> http://10.0.2.2:8000
-///  - Real phone on the same Wi-Fi as your PC              -> http://<your-pc-lan-ip>:8000
-///  - A deployed backend (Render/Railway/etc.)              -> https://your-app.onrender.com
-const String kApiBaseUrl = 'http://10.0.2.2:8000';
+/// Base URL of the bamas-admin-backend FastAPI server — deployed on
+/// Vercel.
+const String kApiBaseUrl = 'https://bamas-admin-backend.vercel.app';

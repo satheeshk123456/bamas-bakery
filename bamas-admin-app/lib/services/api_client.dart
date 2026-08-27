@@ -76,12 +76,43 @@ class ApiClient {
     return _decode(res);
   }
 
-  /// Multipart upload for a menu-item photo picked from the gallery.
-  /// Expects the backend to return JSON like `{"imageUrl": "https://..."}`.
-  Future<dynamic> uploadFile(String path, File file, {String field = 'file'}) async {
+  Future<dynamic> delete(String path) async {
+    final res = await http.delete(_uri(path), headers: await _headers());
+    return _decode(res);
+  }
+
+  /// For endpoints that return a raw file (e.g. GET /orders/export's
+  /// CSV) instead of JSON -- returns the response bytes as-is, or throws
+  /// ApiException on a non-2xx status (reusing the same error-message
+  /// extraction as _decode, since FastAPI still replies with a JSON
+  /// `{"detail": "..."}` body on errors even for a bytes-returning route).
+  Future<List<int>> getBytes(String path, {Map<String, String>? query}) async {
+    final res = await http.get(_uri(path, query), headers: await _headers());
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      return res.bodyBytes;
+    }
+    String message = 'Request failed (${res.statusCode})';
+    try {
+      final body = jsonDecode(res.body);
+      if (body is Map && body['detail'] != null) message = body['detail'].toString();
+    } catch (_) {}
+    throw ApiException(res.statusCode, message);
+  }
+
+  /// Multipart upload for a photo picked from the gallery. [fields] adds
+  /// extra plain-text form fields alongside the file -- e.g. the shop
+  /// image endpoint's `field=logoUrl` saying WHICH photo this is.
+  /// Expects the backend to return JSON like `{"imageUrl": "data:..."}`.
+  Future<dynamic> uploadFile(
+    String path,
+    File file, {
+    String field = 'file',
+    Map<String, String>? fields,
+  }) async {
     final request = http.MultipartRequest('POST', _uri(path));
     final token = await _token;
     if (token != null) request.headers['Authorization'] = 'Bearer $token';
+    if (fields != null) request.fields.addAll(fields);
     request.files.add(await http.MultipartFile.fromPath(field, file.path));
     final streamed = await request.send();
     final res = await http.Response.fromStream(streamed);

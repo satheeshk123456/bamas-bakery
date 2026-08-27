@@ -3,10 +3,13 @@ import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../app_theme.dart';
+import '../services/auth_service.dart';
 import '../services/cart_provider.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
+import '../services/order_api_service.dart';
 import 'order_status_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -93,22 +96,32 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       final token = await NotificationService.getToken();
 
-      final orderId = await FirestoreService().placeOrder(
-        items: cart.toOrderItems(),
-        totalAmount: cart.totalAmount,
+      // Captured before placeOrder/clear() so the WhatsApp message below
+      // still has the items and total to describe, even after the cart
+      // is emptied.
+      final orderItems = cart.toOrderItems();
+      final orderTotal = cart.totalAmount;
+
+      final orderId = await orderApiService.placeOrder(
+        items: orderItems,
+        totalAmount: orderTotal,
         customerName: _nameCtrl.text.trim(),
         customerPhone: _phoneCtrl.text.trim(),
         address: _addressCtrl.text.trim(),
         lat: _lat,
         lng: _lng,
         fcmToken: token,
+        userId: AuthService.instance.currentUser?.uid,
       );
 
-      final orderIds = prefs.getStringList('myOrderIds') ?? [];
-      orderIds.insert(0, orderId);
-      await prefs.setStringList('myOrderIds', orderIds.take(20).toList());
-
       cart.clear();
+
+      // Best-effort: hands off to WhatsApp with the order details
+      // pre-filled, addressed to the shop's own number, so the customer
+      // just has to tap Send. The order is already saved at this point,
+      // so if WhatsApp isn't installed or this fails for any reason, the
+      // order flow itself is unaffected — this never throws.
+      await _notifyShopOnWhatsApp(orderId: orderId, items: orderItems, total: orderTotal);
 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
@@ -120,6 +133,59 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
     } finally {
       if (mounted) setState(() => _placing = false);
+    }
+  }
+
+  /// Opens WhatsApp (via the wa.me deep link — no WhatsApp Business API,
+  /// no approval process, works with a plain personal or business
+  /// WhatsApp number) addressed to the shop's contact number from
+  /// shopSettings, with the new order's details pre-filled as the
+  /// message text. The customer's own WhatsApp account sends it, so it
+  /// arrives from the customer's number as a normal chat message.
+  Future<void> _notifyShopOnWhatsApp({
+    required String orderId,
+    required List<Map<String, dynamic>> items,
+    required double total,
+  }) async {
+    try {
+      final settings = await FirestoreService().shopSettingsStream().first;
+      final shopPhone = settings.contactPhone.replaceAll(RegExp(r'[^0-9]'), '');
+      if (shopPhone.isEmpty) return; // shop hasn't set a contact number yet
+
+      final message = StringBuffer()
+        ..writeln('New order from ${_nameCtrl.text.trim()} (${_phoneCtrl.text.trim()})')
+        ..writeln('Address: ${_addressCtrl.text.trim()}')
+        ..writeln()
+        ..writeln('Items:');
+      for (final it in items) {
+        final qty = it['quantity'] as int;
+        final price = (it['price'] as num).toDouble();
+        message.writeln('$qty x ${it['name']} - ₹${(price * qty).toStringAsFixed(0)}');
+      }
+      message
+        ..writeln()
+        ..writeln('Total: ₹${total.toStringAsFixed(0)}')
+        ..writeln('Order ID: ${orderId.substring(0, 6).toUpperCase()}');
+
+      final uri = Uri.parse(
+        'https://wa.me/$shopPhone?text=${Uri.encodeComponent(message.toString())}',
+      );
+      // Calling launchUrl directly (no canLaunchUrl gate) -- an https://
+      // link can always be opened by *something* (WhatsApp if installed,
+      // otherwise a browser that redirects into WhatsApp Web/the Play
+      // Store), and canLaunchUrl can incorrectly report false on Android
+      // 11+ if the manifest's <queries> block is ever out of date, which
+      // would silently skip this with no visible symptom.
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) {
+        debugPrint('checkout: launchUrl returned false for $uri');
+      }
+    } catch (e) {
+      // Never let a WhatsApp hiccup block order placement -- the order
+      // itself is already saved in Firestore by the time this runs. Still
+      // logged so a real failure (bad number format, etc.) is visible in
+      // `flutter run` output instead of silently vanishing.
+      debugPrint('checkout: could not open WhatsApp: $e');
     }
   }
 
@@ -202,7 +268,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              "Payment is arranged after our team calls to confirm your order — you'll be able to pay by GPay or cash on delivery.",
+              "Payment is arranged after our team calls to confirm your order — you'll pay online via UPI, card, or QR code.",
               style: TextStyle(color: AppBranding.textMuted, fontSize: 12.5),
             ),
             const SizedBox(height: 20),

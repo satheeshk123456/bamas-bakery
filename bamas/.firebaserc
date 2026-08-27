@@ -1,12 +1,15 @@
 {
   "projects": {
-    "default": "REPLACE_WITH_YOUR_FIREBASE_PROJECT_ID"
+    "default": "bamas-13c73"
   },
   "targets": {
-    "REPLACE_WITH_YOUR_FIREBASE_PROJECT_ID": {
+    "bamas-13c73": {
       "hosting": {
-        "admin": ["REPLACE_WITH_YOUR_FIREBASE_PROJECT_ID-admin"]
+        "admin": [
+          "bamas-13c73-admin"
+        ]
       }
     }
-  }
+  },
+  "etags": {}
 }

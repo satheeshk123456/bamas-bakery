@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "594458332820",
+    "project_id": "bamas-13c73",
+    "storage_bucket": "bamas-13c73.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:594458332820:android:b999f9bf654d7ce4fc2e81",
+        "android_client_info": {
+          "package_name": "com.bamasburgerbox.admin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD7LvfUbHf64lrReAuPt83wgpu4MYPETVA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:594458332820:android:9e32bc5e554bfec8fc2e81",
+        "android_client_info": {
+          "package_name": "com.bamasburgerbox.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD7LvfUbHf64lrReAuPt83wgpu4MYPETVA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
