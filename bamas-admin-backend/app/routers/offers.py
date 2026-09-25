@@ -1,39 +1,49 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
-from ..firebase_client import get_db
-from ..image_utils import ITEM_IMAGE_MAX_BYTES, file_to_data_uri
+from ..mongo_client import get_db
+from ..mongo_utils import oid, serialize
+from ..image_utils import ITEM_IMAGE_MAX_BYTES, presigned_url, upload_image
 from ..models import OfferCreate, OfferUpdate
 from ..security import get_current_admin
 
-# Home-page promo banners the admin can add/remove any time, no app
-# update needed. Admin-only end to end (list/create/edit/delete/image) --
-# the customer app never calls this backend for offers at all, it reads
-# the SAME `offers` Firestore collection directly via the client SDK
-# (public read, see firestore.rules), exactly like it already does for
-# categories and menuItems, and filters to isActive itself. That keeps
-# the carousel live-updating without any extra network round trip.
-router = APIRouter(prefix="/offers", tags=["offers"], dependencies=[Depends(get_current_admin)])
+# Home-page promo banners the admin can add/remove any time.
+#
+# Since the move off Firestore, the bamas customer app can no longer read
+# this collection directly (no client-side Mongo SDK) -- it now calls the
+# PUBLIC GET /offers/active below instead. Everything else here
+# (list-all/create/edit/delete/image) stays admin-only, same as before.
+router = APIRouter(prefix="/offers", tags=["offers"])
 
 
-def _serialize(doc) -> dict:
-    data = doc.to_dict() or {}
-    data["id"] = doc.id
+def _with_image(doc) -> dict:
+    data = serialize(doc)
+    if data is not None and data.get("imageUrl"):
+        data["imageUrl"] = presigned_url(data["imageUrl"])
     return data
 
 
-@router.get("")
-def list_offers():
-    """All offers, including inactive ones -- this is for the admin app's
-    management screen so a paused offer can still be found and re-enabled."""
+@router.get("/active")
+def list_active_offers():
+    """PUBLIC. Only isActive offers, sorted for the carousel -- what the
+    bamas customer app's home screen calls."""
     db = get_db()
-    docs = db.collection("offers").order_by("sortOrder").stream()
-    return [_serialize(d) for d in docs]
+    docs = db.offers.find({"isActive": True}).sort("sortOrder", 1)
+    return [_with_image(d) for d in docs]
 
 
-@router.post("")
+@router.get("", dependencies=[Depends(get_current_admin)])
+def list_offers():
+    """All offers, including inactive ones -- the admin app's management
+    screen, so a paused offer can still be found and re-enabled."""
+    db = get_db()
+    docs = db.offers.find().sort("sortOrder", 1)
+    return [_with_image(d) for d in docs]
+
+
+@router.post("", dependencies=[Depends(get_current_admin)])
 def create_offer(body: OfferCreate):
     db = get_db()
-    existing_count = len(list(db.collection("offers").stream()))
+    existing_count = db.offers.count_documents({})
     data = {
         "title": body.title.strip(),
         "subtitle": (body.subtitle or "").strip(),
@@ -41,40 +51,40 @@ def create_offer(body: OfferCreate):
         "isActive": body.isActive,
         "sortOrder": existing_count + 1,
     }
-    ref = db.collection("offers").document()
-    ref.set(data)
-    return _serialize(ref.get())
+    result = db.offers.insert_one(dict(data))
+    data["_id"] = result.inserted_id
+    return _with_image(data)
 
 
-@router.patch("/{offer_id}")
+@router.patch("/{offer_id}", dependencies=[Depends(get_current_admin)])
 def update_offer(offer_id: str, body: OfferUpdate):
     db = get_db()
-    ref = db.collection("offers").document(offer_id)
-    if not ref.get().exists:
+    _id = oid(offer_id)
+    if db.offers.find_one({"_id": _id}) is None:
         raise HTTPException(status_code=404, detail="Offer not found.")
     updates = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update.")
-    ref.update(updates)
-    return _serialize(ref.get())
+    db.offers.update_one({"_id": _id}, {"$set": updates})
+    return _with_image(db.offers.find_one({"_id": _id}))
 
 
-@router.post("/{offer_id}/image")
+@router.post("/{offer_id}/image", dependencies=[Depends(get_current_admin)])
 async def upload_offer_image(offer_id: str, file: UploadFile = File(...)):
     db = get_db()
-    ref = db.collection("offers").document(offer_id)
-    if not ref.get().exists:
+    _id = oid(offer_id)
+    if db.offers.find_one({"_id": _id}) is None:
         raise HTTPException(status_code=404, detail="Offer not found.")
-    data_uri = await file_to_data_uri(file, max_bytes=ITEM_IMAGE_MAX_BYTES)
-    ref.update({"imageUrl": data_uri})
-    return {"imageUrl": data_uri}
+    key = await upload_image(file, prefix="offers", doc_id=offer_id, max_bytes=ITEM_IMAGE_MAX_BYTES)
+    db.offers.update_one({"_id": _id}, {"$set": {"imageUrl": key}})
+    return {"imageUrl": presigned_url(key)}
 
 
-@router.delete("/{offer_id}")
+@router.delete("/{offer_id}", dependencies=[Depends(get_current_admin)])
 def delete_offer(offer_id: str):
     db = get_db()
-    ref = db.collection("offers").document(offer_id)
-    if not ref.get().exists:
+    _id = oid(offer_id)
+    if db.offers.find_one({"_id": _id}) is None:
         raise HTTPException(status_code=404, detail="Offer not found.")
-    ref.delete()
+    db.offers.delete_one({"_id": _id})
     return {"deleted": True}

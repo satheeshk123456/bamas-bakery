@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import '../models/menu_item.dart';
 import '../services/menu_service.dart';
+import 'categories_screen.dart';
 import 'category_add_screen.dart';
 import 'menu_add_screen.dart';
 import 'menu_edit_screen.dart';
@@ -70,9 +71,17 @@ class _MenuAvailabilityScreenState extends State<MenuAvailabilityScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.category_outlined),
-            tooltip: 'Add new category',
+            // Was "Add new category", which was the whole problem: adding
+            // one was possible and removing one was not. This now opens
+            // the list, where a category can be added, hidden or deleted.
+            tooltip: 'Categories',
             onPressed: () async {
-              await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CategoryAddScreen()));
+              await Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const CategoriesScreen()),
+              );
+              // An item's category may have been hidden or deleted while
+              // that screen was open, so the list is rebuilt on return.
+              if (mounted) _refresh();
             },
           ),
           IconButton(

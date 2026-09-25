@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../app_theme.dart';
+import '../services/branch_service.dart';
+import '../services/session.dart';
+import 'admins_screen.dart';
+import 'branches_screen.dart';
 import '../models/order.dart';
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
@@ -10,6 +14,7 @@ import 'login_screen.dart';
 import 'menu_availability_screen.dart';
 import 'offers_screen.dart';
 import 'order_detail_screen.dart';
+import 'backup_screen.dart';
 import 'orders_report_screen.dart';
 import 'settings_screen.dart';
 
@@ -35,6 +40,20 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
         MaterialPageRoute(builder: (_) => OrderDetailScreen(orderId: orderId)),
       );
     };
+    _loadBranchName();
+  }
+
+  /// The branch list is what turns session.branchId into a name in the app
+  /// bar. It is fetched once here and cached in BranchService, so the menu
+  /// and staff screens reuse it rather than each fetching their own.
+  Future<void> _loadBranchName() async {
+    try {
+      await branchService.list();
+      if (mounted) setState(() {});
+    } catch (_) {
+      // Offline, or an older backend with no /branches route: the app bar
+      // just falls back to "Your branch" and nothing else is affected.
+    }
   }
 
   @override
@@ -47,7 +66,22 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(AppBranding.appName),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(AppBranding.appName),
+            // Which branch's orders these are. Worth the two lines: a
+            // manager who thinks they are looking at every order will sit
+            // waiting for one that belongs to another shop.
+            Text(
+              session.isBranchManager
+                  ? (branchService.byId(session.branchId)?.name ?? 'Your branch')
+                  : 'All branches',
+              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w400),
+            ),
+          ],
+        ),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [Tab(text: 'Pending'), Tab(text: 'Accepted'), Tab(text: 'Completed')],
@@ -62,11 +96,20 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
           PopupMenuButton<Widget>(
             tooltip: 'More',
             onSelected: (screen) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen)),
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: OrdersReportScreen(), child: Text('Order reports & download')),
-              PopupMenuItem(value: OffersScreen(), child: Text('Offers')),
-              PopupMenuItem(value: FeedbackScreen(), child: Text('Feedback')),
-              PopupMenuItem(value: SettingsScreen(), child: Text('Settings')),
+            // Hidden entries are not a security control -- the backend
+            // refuses these routes for the wrong role regardless. They are
+            // hidden so a manager isn't offered buttons that only 403.
+            itemBuilder: (context) => [
+              const PopupMenuItem(value: OrdersReportScreen(), child: Text('Order reports & download')),
+              const PopupMenuItem(value: BranchesScreen(), child: Text('Branches')),
+              if (session.canManageStaff)
+                const PopupMenuItem(value: AdminsScreen(), child: Text('Staff logins')),
+              if (session.seesAllBranches) ...[
+                const PopupMenuItem(value: OffersScreen(), child: Text('Offers')),
+                const PopupMenuItem(value: SettingsScreen(), child: Text('Settings')),
+                const PopupMenuItem(value: BackupScreen(), child: Text('Data backup')),
+              ],
+              const PopupMenuItem(value: FeedbackScreen(), child: Text('Feedback')),
             ],
           ),
           IconButton(

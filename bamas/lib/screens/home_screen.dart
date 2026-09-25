@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../app_theme.dart';
+import '../models/branch.dart';
+import '../services/branch_service.dart';
+import 'branch_picker_screen.dart';
 import '../models/category.dart';
 import '../models/offer.dart';
 import '../models/review.dart';
 import '../models/shop_settings.dart';
 import '../services/cart_provider.dart';
-import '../services/firestore_service.dart';
+import '../services/api_service.dart';
 import '../widgets/category_card.dart';
 import '../widgets/hero_banner.dart';
 import '../widgets/offers_carousel.dart';
@@ -164,7 +167,11 @@ class _HomeTab extends StatelessWidget {
                       crossAxisCount: 3,
                       mainAxisSpacing: 14,
                       crossAxisSpacing: 12,
-                      childAspectRatio: 0.82,
+                      // Square photo + the name underneath it. The slack
+                      // is deliberate: a tile that overflows by a pixel
+                      // shows Flutter's yellow-and-black stripes to the
+                      // customer, and font scaling makes that easy to hit.
+                      childAspectRatio: 0.78,
                     ),
                     itemCount: categories.length,
                     itemBuilder: (context, i) {
@@ -212,48 +219,108 @@ class _Header extends StatelessWidget {
             ),
           ],
         ),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: Image.asset(
-                AppBranding.logoAsset,
-                height: 56,
-                fit: BoxFit.contain,
-                alignment: Alignment.centerLeft,
-                errorBuilder: (_, __, ___) => Text(
-                  AppBranding.shopName,
-                  style: Theme.of(context).textTheme.headlineSmall,
+            Row(
+              children: [
+                Expanded(
+                  child: Image.asset(
+                    AppBranding.logoAsset,
+                    height: 56,
+                    fit: BoxFit.contain,
+                    alignment: Alignment.centerLeft,
+                    errorBuilder: (_, __, ___) => Text(
+                      AppBranding.shopName,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-              decoration: BoxDecoration(
-                color: (isOpen ? AppBranding.success : AppBranding.danger)
-                    .withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                isOpen ? 'Open' : 'Closed',
-                style: TextStyle(
-                  color: isOpen ? AppBranding.success : AppBranding.danger,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: (isOpen ? AppBranding.success : AppBranding.danger)
+                        .withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    isOpen ? 'Open' : 'Closed',
+                    style: TextStyle(
+                      color: isOpen ? AppBranding.success : AppBranding.danger,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(Icons.person_outline, color: AppBranding.textDark),
+                  tooltip: 'My Account',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AccountScreen()),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 4),
-            IconButton(
-              icon: const Icon(Icons.person_outline, color: AppBranding.textDark),
-              tooltip: 'My Account',
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AccountScreen()),
-              ),
-            ),
+            const _BranchRow(),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Which branch the customer is ordering from, and a way to change it.
+///
+/// Worth the space in the header: without it somebody orders from the wrong
+/// side of town and only finds out when the food does not arrive.
+class _BranchRow extends StatelessWidget {
+  const _BranchRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<Branch?>(
+      valueListenable: BranchService.instance.selected,
+      builder: (context, branch, _) {
+        if (branch == null) return const SizedBox.shrink();
+        return InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const BranchPickerScreen(isChanging: true)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 6, bottom: 2),
+            child: Row(
+              children: [
+                const Icon(Icons.storefront, size: 15, color: AppBranding.textMuted),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    branch.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppBranding.textDark,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                const Text(
+                  'Change',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppBranding.primary,
+                  ),
+                ),
+                const Icon(Icons.keyboard_arrow_down, size: 15, color: AppBranding.primary),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

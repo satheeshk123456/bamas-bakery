@@ -12,4 +12,4 @@ const bool kDemoMode = false;
 
 /// Base URL of the bamas-admin-backend FastAPI server — deployed on
 /// Vercel.
-const String kApiBaseUrl = 'https://bamas-admin-backend.vercel.app';
+const String kApiBaseUrl = 'http://52.62.189.19';

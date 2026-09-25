@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// pending        -> just placed, waiting for admin's confirmation call
 /// accepted       -> admin confirmed the order on the phone
@@ -28,6 +27,13 @@ class OrderLocation {
 
 class OrderModel {
   final String id;
+
+  /// Which branch this order was placed at. Null only for orders created
+  /// before the multi-branch upgrade (the backend's migration backfills
+  /// those). The order status screen uses it so the payment QR always
+  /// belongs to the branch that took the order, even if the customer has
+  /// since switched branches in the app.
+  final String? branchId;
   final List<Map<String, dynamic>> items;
   final double totalAmount;
   final String customerName;
@@ -38,10 +44,11 @@ class OrderModel {
   final bool paymentConfirmedByCustomer;
   final String? fcmToken;
   final String? userId;
-  final Timestamp? createdAt;
+  final DateTime? createdAt;
 
   OrderModel({
     required this.id,
+    this.branchId,
     required this.items,
     required this.totalAmount,
     required this.customerName,
@@ -58,6 +65,7 @@ class OrderModel {
   factory OrderModel.fromMap(String id, Map<String, dynamic> map) {
     return OrderModel(
       id: id,
+      branchId: map['branchId'] as String?,
       items: List<Map<String, dynamic>>.from(map['items'] ?? []),
       totalAmount: (map['totalAmount'] ?? 0).toDouble(),
       customerName: map['customerName'] ?? '',
@@ -68,27 +76,18 @@ class OrderModel {
       paymentConfirmedByCustomer: map['paymentConfirmedByCustomer'] ?? false,
       fcmToken: map['fcmToken'],
       userId: map['userId'],
-      createdAt: _parseTimestamp(map['createdAt']),
+      createdAt: _parseDate(map['createdAt']),
     );
   }
 
-  /// Orders reach this model from two different sources: the native
-  /// Firestore SDK (admin/demo streams), which hands back a real
-  /// [Timestamp], and the bamas-admin-backend HTTP API
-  /// (GET /account/orders), which JSON-serialises the same field as an
-  /// ISO8601 string via Python's `.isoformat()`. Assigning that string
-  /// straight into a `Timestamp?` field used to throw a runtime
-  /// TypeError the moment an order came back over HTTP (the server
-  /// logs looked perfectly clean -- 200 OK -- because the failure only
-  /// happened afterwards, on-device, while decoding the response) --
-  /// this normalises either shape instead of assuming one.
-  static Timestamp? _parseTimestamp(dynamic value) {
+  /// The backend serialises dates as ISO8601 strings (Python's
+  /// `.isoformat()`). Anything else becomes null rather than throwing
+  /// while decoding a response -- that failure used to surface on-device
+  /// with perfectly clean 200 OK server logs, which was hard to trace.
+  static DateTime? _parseDate(dynamic value) {
     if (value == null) return null;
-    if (value is Timestamp) return value;
-    if (value is String) {
-      final parsed = DateTime.tryParse(value);
-      if (parsed != null) return Timestamp.fromDate(parsed);
-    }
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
     return null;
   }
 }

@@ -19,4 +19,4 @@ const bool kDemoMode = false;
 ///
 /// Set this to the same URL used for kApiBaseUrl in the admin app
 /// (bamas-admin-app/lib/app_config.dart), e.g. your Vercel deployment.
-const String kApiBaseUrl = 'https://bamas-admin-backend.vercel.app';
+const String kApiBaseUrl = 'http://52.62.189.19';

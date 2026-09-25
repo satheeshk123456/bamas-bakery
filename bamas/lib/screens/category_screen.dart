@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/category.dart';
 import '../models/menu_item.dart';
-import '../services/firestore_service.dart';
+import '../services/api_service.dart';
 import '../widgets/menu_item_card.dart';
 import '../widgets/mini_cart_bar.dart';
 import 'cart_screen.dart';
@@ -35,7 +35,10 @@ class CategoryScreen extends StatelessWidget {
                     crossAxisCount: 2,
                     mainAxisSpacing: 14,
                     crossAxisSpacing: 14,
-                    childAspectRatio: 0.72,
+                    // Taller than before: the photo is full-bleed at
+                    // 1.08 and the name, price and add button all sit
+                    // below it now, so the card needs the extra height.
+                    childAspectRatio: 0.70,
                   ),
                   itemCount: items.length,
                   itemBuilder: (context, i) => MenuItemCard(item: items[i]),

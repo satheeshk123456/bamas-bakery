@@ -2,9 +2,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../app_theme.dart';
+import '../models/branch.dart';
 import '../models/category.dart';
 import '../models/menu_item.dart';
+import '../services/branch_service.dart';
 import '../services/menu_service.dart';
+import '../services/session.dart';
 
 /// Lets a shop owner add a brand-new item to the menu: name, description,
 /// category, price ("rate"), and an optional photo. Saving here is what
@@ -25,6 +28,12 @@ class _MenuAddScreenState extends State<MenuAddScreen> {
 
   late final Future<List<Category>> _categoriesFuture;
   String? _categoryId;
+
+  /// Only asked of an owner/developer, who can add items to any branch. A
+  /// branch manager never sees this: the backend overwrites whatever is
+  /// sent with their own branch, so asking them would be a lie.
+  late final Future<List<Branch>> _branchesFuture;
+  String? _branchId;
   File? _pickedImageFile;
   bool _saving = false;
   String? _error;
@@ -33,6 +42,9 @@ class _MenuAddScreenState extends State<MenuAddScreen> {
   void initState() {
     super.initState();
     _categoriesFuture = menuService.listCategories();
+    _branchesFuture = session.seesAllBranches
+        ? branchService.list()
+        : Future<List<Branch>>.value(const []);
   }
 
   @override
@@ -77,6 +89,10 @@ class _MenuAddScreenState extends State<MenuAddScreen> {
       setState(() => _error = 'Please choose a category.');
       return;
     }
+    if (session.seesAllBranches && (_branchId == null || _branchId!.isEmpty)) {
+      setState(() => _error = 'Please choose which branch sells this item.');
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
@@ -87,6 +103,7 @@ class _MenuAddScreenState extends State<MenuAddScreen> {
         description: _descriptionController.text.trim(),
         price: double.parse(_priceController.text.trim()),
         categoryId: _categoryId!,
+        branchId: session.seesAllBranches ? _branchId : null,
       );
       if (_pickedImageFile != null) {
         final imageUrl = await menuService.uploadImage(item.id, _pickedImageFile!);
@@ -150,7 +167,7 @@ class _MenuAddScreenState extends State<MenuAddScreen> {
                   }
                   final categories = snapshot.data ?? [];
                   return DropdownButtonFormField<String>(
-                    value: _categoryId,
+                    initialValue: _categoryId,
                     hint: const Text('Select category'),
                     items: categories
                         .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
@@ -159,6 +176,35 @@ class _MenuAddScreenState extends State<MenuAddScreen> {
                   );
                 },
               ),
+              if (session.seesAllBranches) ...[
+                const SizedBox(height: 16),
+                Text('Branch', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                FutureBuilder<List<Branch>>(
+                  future: _branchesFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return const LinearProgressIndicator();
+                    }
+                    final branches = snapshot.data ?? const <Branch>[];
+                    if (branches.isEmpty) {
+                      return const Text(
+                        'No branches found. Add a branch first, or this item '
+                        'has nowhere to be sold.',
+                        style: TextStyle(color: AppBranding.danger),
+                      );
+                    }
+                    return DropdownButtonFormField<String>(
+                      initialValue: _branchId,
+                      hint: const Text('Select branch'),
+                      items: branches
+                          .map((b) => DropdownMenuItem(value: b.id, child: Text(b.name)))
+                          .toList(),
+                      onChanged: (value) => setState(() => _branchId = value),
+                    );
+                  },
+                ),
+              ],
               const SizedBox(height: 16),
               Text('Rate (₹)', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),

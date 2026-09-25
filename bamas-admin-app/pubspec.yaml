@@ -20,9 +20,12 @@ dependencies:
   # --- Menu editor: pick a photo from the gallery to upload ---
   image_picker: ^1.1.2
 
+  # --- Data Backup screen: pick the .xlsx file to restore from ---
+  file_picker: ^12.2.0
+
   # --- Order Reports screen: save/share the downloaded CSV export ---
   path_provider: ^2.1.4
-  share_plus: ^10.1.2
+  share_plus: ^13.3.0
 
   # --- Push notifications (subscribes to the SAME FCM topic the existing
   # Cloud Function already publishes new-order pushes to; see

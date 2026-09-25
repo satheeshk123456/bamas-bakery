@@ -210,7 +210,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Shop is open'),
-                        subtitle: const Text('Turn off to pause new orders'),
+                        subtitle: const Text(
+                          'Master switch. Turning this off pauses new orders at '
+                          'EVERY branch. Each branch also has its own switch '
+                          'under Branches, for closing just that one.',
+                        ),
                         value: _settings!.isOpen,
                         onChanged: (v) => setState(() => _settings = _settings!.copyWith(isOpen: v)),
                       ),

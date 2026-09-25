@@ -4,7 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../app_theme.dart';
 import '../models/order_model.dart';
 import '../models/shop_settings.dart';
-import '../services/firestore_service.dart';
+import '../services/api_service.dart';
 import '../widgets/app_image.dart';
 import 'home_screen.dart';
 
@@ -264,7 +264,10 @@ class _PaymentCardState extends State<_PaymentCard> {
             ),
           ] else if (method == 'gpay') ...[
             StreamBuilder<ShopSettings>(
-              stream: FirestoreService().shopSettingsStream(),
+              // The branch the ORDER was placed at -- not whatever branch the
+              // customer happens to have selected now. Paying the wrong
+              // branch's UPI id is money in someone else's account.
+              stream: FirestoreService().shopSettingsStream(branchId: widget.order.branchId),
               builder: (context, snap) {
                 final qrUrl = snap.data?.gpayQrUrl ?? '';
                 final upiId = snap.data?.upiId ?? '';
@@ -364,7 +367,9 @@ class _PaymentCardState extends State<_PaymentCard> {
           ],
           const SizedBox(height: 8),
           StreamBuilder<ShopSettings>(
-            stream: FirestoreService().shopSettingsStream(),
+            // The branch the ORDER was placed at -- not whatever branch the
+            // customer happens to have selected now.
+            stream: FirestoreService().shopSettingsStream(branchId: widget.order.branchId),
             builder: (context, snap) {
               final shopPhone = snap.data?.contactPhone ?? '';
               if (shopPhone.isEmpty) return const SizedBox.shrink();
