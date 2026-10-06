@@ -99,6 +99,29 @@ class ApiClient {
     throw ApiException(res.statusCode, message);
   }
 
+  /// Multipart upload of bytes we already hold in memory (rather than a
+  /// file on disk) -- used by the Excel RESTORE, where file_picker hands
+  /// back the picked spreadsheet's bytes. [query] carries the restore
+  /// endpoint's `confirm=` guard, which FastAPI reads as a query param
+  /// because the request body is already taken by the upload itself.
+  Future<dynamic> uploadBytes(
+    String path,
+    List<int> bytes, {
+    String field = 'file',
+    String filename = 'upload.bin',
+    Map<String, String>? query,
+    Map<String, String>? fields,
+  }) async {
+    final request = http.MultipartRequest('POST', _uri(path, query));
+    final token = await _token;
+    if (token != null) request.headers['Authorization'] = 'Bearer $token';
+    if (fields != null) request.fields.addAll(fields);
+    request.files.add(http.MultipartFile.fromBytes(field, bytes, filename: filename));
+    final streamed = await request.send();
+    final res = await http.Response.fromStream(streamed);
+    return _decode(res);
+  }
+
   /// Multipart upload for a photo picked from the gallery. [fields] adds
   /// extra plain-text form fields alongside the file -- e.g. the shop
   /// image endpoint's `field=logoUrl` saying WHICH photo this is.

@@ -113,7 +113,9 @@ class _OrdersReportScreenState extends State<OrdersReportScreen> {
       final fileName = 'orders_${_apiFormat.format(_from)}_to_${_apiFormat.format(_to)}.csv';
       final file = File('${dir.path}/$fileName');
       await file.writeAsBytes(bytes, flush: true);
-      await Share.shareXFiles([XFile(file.path)], subject: 'Order export ($fileName)');
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(file.path)], subject: 'Order export ($fileName)'),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not export: $e')));

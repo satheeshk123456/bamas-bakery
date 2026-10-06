@@ -43,7 +43,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         email: _emailCtrl.text.trim(),
         password: _passwordCtrl.text,
       );
-      // AuthGate takes it from here.
+      // AuthGate swaps the ROOT route to HomeScreen, but this screen was
+      // pushed on top of Login, so it would still be covering it. Popping
+      // back to the root reveals the home page.
+      if (!mounted) return;
+      Navigator.of(context).popUntil((r) => r.isFirst);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)

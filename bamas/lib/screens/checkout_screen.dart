@@ -7,7 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../app_theme.dart';
 import '../services/auth_service.dart';
 import '../services/cart_provider.dart';
-import '../services/firestore_service.dart';
+import '../services/api_service.dart';
 import '../services/notification_service.dart';
 import '../services/order_api_service.dart';
 import 'order_status_screen.dart';
@@ -88,6 +88,39 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final cart = context.read<CartProvider>();
     if (cart.items.isEmpty) return;
 
+    // The branch can be shut between opening this screen and tapping
+    // Submit, so this is checked again here rather than trusting the
+    // disabled button on the cart screen. If the check itself fails
+    // (offline, slow) the order is allowed through -- the backend refuses
+    // a closed branch outright, so nothing gets past both.
+    try {
+      final settings = await FirestoreService().shopSettingsStream().first;
+      if (!settings.isOpen) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This branch is closed right now, so orders are paused. '
+                'Your cart is saved — please try again when it reopens.'),
+          ),
+        );
+        return;
+      }
+    } catch (_) {
+      // Could not check. Let it through; the backend decides.
+    }
+
+    // The order is attributed to a user id, so a signed-out customer would
+    // create an order nobody can track in "My Orders". If the session has
+    // gone (expired token, cleared storage), send them to log in first --
+    // AuthGate shows the login screen as soon as the session is cleared.
+    if (AuthService.instance.currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to place your order.')),
+      );
+      await AuthService.instance.logout();
+      return;
+    }
+
     setState(() => _placing = true);
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -111,7 +144,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         lat: _lat,
         lng: _lng,
         fcmToken: token,
-        userId: AuthService.instance.currentUser?.uid,
+        userId: AuthService.instance.currentUser!.uid,
       );
 
       cart.clear();

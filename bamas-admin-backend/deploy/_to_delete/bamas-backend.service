@@ -1,0 +1,14 @@
+[Unit]
+Description=Bama's Burger Box backend (FastAPI)
+After=network.target mongod.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/bamas-admin-backend
+EnvironmentFile=/home/ubuntu/bamas-admin-backend/.env
+ExecStart=/home/ubuntu/bamas-admin-backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

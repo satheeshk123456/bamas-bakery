@@ -1,0 +1,14 @@
+[Unit]
+Description=bamasandstore8 backend (FastAPI)
+After=network.target mongod.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/bamasandstore8
+EnvironmentFile=/home/ubuntu/bamasandstore8/.env
+ExecStart=/home/ubuntu/bamasandstore8/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

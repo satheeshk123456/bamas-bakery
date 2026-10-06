@@ -1,136 +1,121 @@
-from fastapi import APIRouter, Depends, HTTPException
-import httpx
-from firebase_admin import auth as fb_auth, firestore
+import re
+import uuid
+from datetime import datetime, timezone
 
-from ..config import settings
-from ..firebase_client import get_db, get_firebase_app
+from fastapi import APIRouter, Depends, HTTPException
+
+from ..mongo_client import get_db
+from ..mongo_utils import serialize
 from ..models import (
     AuthTokenResponse,
     CustomerLoginRequest,
     CustomerRegisterRequest,
     ForgotPasswordRequest,
+    PaymentUpdate,
+    ProfileUpdate,
 )
-from ..security import get_current_customer_uid
+from ..mongo_utils import oid
+from ..security import (
+    TOKEN_TYPE_CUSTOMER,
+    create_access_token,
+    get_current_customer_uid,
+    hash_password,
+    verify_password,
+)
 
-# Everything the bamas customer app needs for accounts: register, login,
-# forgot-password, "my profile", "my orders". Deliberately a SEPARATE
-# router/prefix from auth.py (that one is the shop admin's own
-# username+password login) and from orders.py's /orders/{order_id}
-# (an /orders/mine path would collide with that dynamic route).
+# Customer accounts, handled entirely by this backend: register, login,
+# "my profile", "my orders". Passwords are bcrypt-hashed in MongoDB and
+# sessions are this backend's own JWTs -- the same mechanism the shop
+# admin login uses. Firebase is no longer involved in identity at all
+# (it is kept only for FCM push notifications).
 router = APIRouter(prefix="/account", tags=["account"])
 
-IDENTITY_TOOLKIT_BASE = "https://identitytoolkit.googleapis.com/v1/accounts"
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+MIN_PASSWORD_LEN = 6
 
 
-def _require_web_api_key():
-    if not settings.firebase_web_api_key:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "Server is missing FIREBASE_WEB_API_KEY. Set it in the "
-                "backend's environment variables (Firebase console -> "
-                "Project settings -> General -> Web API Key)."
-            ),
-        )
+def _clean_email(value: str) -> str:
+    email = (value or "").strip().lower()
+    if not EMAIL_RE.match(email):
+        raise HTTPException(status_code=400, detail="Please enter a valid email address.")
+    return email
+
+
+def _issue(uid: str) -> AuthTokenResponse:
+    return AuthTokenResponse(uid=uid, accessToken=create_access_token(uid, TOKEN_TYPE_CUSTOMER))
 
 
 @router.post("/register", response_model=AuthTokenResponse)
-async def register(body: CustomerRegisterRequest):
-    """Creates the Firebase Auth user AND the users/{uid} profile doc,
-    server-side, using the Admin SDK -- the app never talks to Firebase
-    Auth directly to sign someone up."""
-    get_firebase_app()
-    try:
-        user = fb_auth.create_user(
-            email=body.email.strip(),
-            password=body.password,
-            display_name=body.name.strip(),
+def register(body: CustomerRegisterRequest):
+    email = _clean_email(body.email)
+    if len(body.password or "") < MIN_PASSWORD_LEN:
+        raise HTTPException(
+            status_code=400,
+            detail="Password must be at least %d characters." % MIN_PASSWORD_LEN,
         )
-    except fb_auth.EmailAlreadyExistsError:
-        raise HTTPException(status_code=409, detail="An account already exists for that email.")
-    except ValueError as e:
-        # Admin SDK raises ValueError for things like "password too short"
-        # or a malformed email.
-        raise HTTPException(status_code=400, detail=str(e))
 
     db = get_db()
-    db.collection("users").document(user.uid).set(
-        {
-            "name": body.name.strip(),
-            "phone": body.phone.strip(),
-            "email": body.email.strip(),
-            "createdAt": firestore.SERVER_TIMESTAMP,
-        }
-    )
+    existing = db.users.find_one({"email": email})
 
-    token = fb_auth.create_custom_token(user.uid).decode("utf-8")
-    return AuthTokenResponse(uid=user.uid, customToken=token)
+    if existing and existing.get("passwordHash"):
+        raise HTTPException(status_code=409, detail="An account already exists for that email.")
+
+    now = datetime.now(timezone.utc)
+    fields = {
+        "name": (body.name or "").strip(),
+        "phone": (body.phone or "").strip(),
+        "email": email,
+        "passwordHash": hash_password(body.password),
+    }
+
+    if existing:
+        # An account carried over from the Firestore era: it has a profile
+        # and past orders but no password yet (Firebase held those). Set the
+        # password on the SAME document so the customer keeps their order
+        # history instead of silently starting over under a new id.
+        uid = existing["_id"]
+        db.users.update_one({"_id": uid}, {"$set": fields})
+    else:
+        uid = uuid.uuid4().hex
+        fields["createdAt"] = now
+        db.users.insert_one({"_id": uid, **fields})
+
+    return _issue(uid)
 
 
 @router.post("/login", response_model=AuthTokenResponse)
-async def login(body: CustomerLoginRequest):
-    """Checks the password via Google's Identity Toolkit REST API (the
-    Admin SDK has no "verify this password" call), then mints a Firebase
-    custom token for that uid so the app can establish a normal session."""
-    _require_web_api_key()
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.post(
-            f"{IDENTITY_TOOLKIT_BASE}:signInWithPassword",
-            params={"key": settings.firebase_web_api_key},
-            json={"email": body.email.strip(), "password": body.password, "returnSecureToken": True},
-        )
-    if resp.status_code != 200:
+def login(body: CustomerLoginRequest):
+    email = (body.email or "").strip().lower()
+    db = get_db()
+    user = db.users.find_one({"email": email})
+    # Same message whether the email is unknown or the password is wrong,
+    # so this endpoint can't be used to discover which emails are registered.
+    if not user or not verify_password(body.password or "", user.get("passwordHash", "")):
         raise HTTPException(status_code=401, detail="Incorrect email or password.")
-
-    uid = resp.json()["localId"]
-    get_firebase_app()
-    token = fb_auth.create_custom_token(uid).decode("utf-8")
-    return AuthTokenResponse(uid=uid, customToken=token)
+    return _issue(user["_id"])
 
 
 @router.post("/forgot-password")
-async def forgot_password(body: ForgotPasswordRequest):
-    _require_web_api_key()
-    async with httpx.AsyncClient(timeout=10) as client:
-        await client.post(
-            f"{IDENTITY_TOOLKIT_BASE}:sendOobCode",
-            params={"key": settings.firebase_web_api_key},
-            json={"requestType": "PASSWORD_RESET", "email": body.email.strip()},
-        )
-    # Always report success, even if that email has no account -- so this
-    # endpoint can't be used to check which emails are registered.
-    return {"sent": True}
+def forgot_password(body: ForgotPasswordRequest):
+    # Password reset used to go through Firebase's email service. With
+    # Firebase Auth removed there is no mail sender configured, so rather
+    # than pretend an email was sent, say so plainly.
+    raise HTTPException(
+        status_code=501,
+        detail=(
+            "Password reset by email isn't available yet. "
+            "Please contact the shop and we'll reset it for you."
+        ),
+    )
 
 
 @router.get("/me")
 def get_my_profile(uid: str = Depends(get_current_customer_uid)):
     db = get_db()
-    doc_ref = db.collection("users").document(uid)
-    doc = doc_ref.get()
-    if not doc.exists:
-        # Self-heal instead of 404ing forever: the caller has a valid
-        # Firebase session token (get_current_customer_uid already
-        # verified it), so the Auth user genuinely exists -- but their
-        # users/{uid} profile doc is missing. This happens for accounts
-        # created before /account/register started writing this doc, or
-        # created directly in the Firebase console. Build a minimal
-        # profile from the Auth record so the Account screen always has
-        # something to show instead of a blank name.
-        try:
-            auth_user = fb_auth.get_user(uid)
-        except Exception:
-            auth_user = None
-        doc_ref.set(
-            {
-                "name": (getattr(auth_user, "display_name", None) or "") if auth_user else "",
-                "phone": "",
-                "email": (getattr(auth_user, "email", None) or "") if auth_user else "",
-                "createdAt": firestore.SERVER_TIMESTAMP,
-            },
-            merge=True,
-        )
-        doc = doc_ref.get()
-    data = doc.to_dict() or {}
+    doc = db.users.find_one({"_id": uid})
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Profile not found.")
+    data = {k: v for k, v in doc.items() if k not in ("_id", "passwordHash")}
     data["uid"] = uid
     created = data.get("createdAt")
     if created is not None and hasattr(created, "isoformat"):
@@ -141,19 +126,51 @@ def get_my_profile(uid: str = Depends(get_current_customer_uid)):
 @router.get("/orders")
 def get_my_orders(uid: str = Depends(get_current_customer_uid), limit: int = 50):
     db = get_db()
-    query = (
-        db.collection("orders")
-        .where("userId", "==", uid)
-        .order_by("createdAt", direction="DESCENDING")
-        .limit(limit)
-    )
-    orders = []
-    for doc in query.stream():
-        data = doc.to_dict() or {}
-        data["id"] = doc.id
-        for key in ("createdAt", "updatedAt"):
-            value = data.get(key)
-            if value is not None and hasattr(value, "isoformat"):
-                data[key] = value.isoformat()
-        orders.append(data)
-    return orders
+    docs = db.orders.find({"userId": uid}).sort("createdAt", -1).limit(limit)
+    return [serialize(d) for d in docs]
+
+
+@router.patch("/me")
+def update_my_profile(body: ProfileUpdate, uid: str = Depends(get_current_customer_uid)):
+    updates = {k: v.strip() if isinstance(v, str) else v
+               for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update.")
+    db = get_db()
+    if db.users.update_one({"_id": uid}, {"$set": updates}).matched_count == 0:
+        raise HTTPException(status_code=404, detail="Profile not found.")
+    return get_my_profile(uid)
+
+
+def _my_order_or_404(db, order_id: str, uid: str):
+    """Fetch one order and refuse it unless it belongs to this customer.
+
+    Without the userId check any signed-in customer could read anyone
+    else's order by guessing an id -- names, phone numbers and addresses.
+    """
+    doc = db.orders.find_one({"_id": oid(order_id)})
+    if doc is None or doc.get("userId") != uid:
+        raise HTTPException(status_code=404, detail="Order not found.")
+    return doc
+
+
+@router.get("/orders/{order_id}")
+def get_my_order(order_id: str, uid: str = Depends(get_current_customer_uid)):
+    """One of the customer's own orders -- the app polls this to show
+    live status while an order is being prepared."""
+    return serialize(_my_order_or_404(get_db(), order_id, uid))
+
+
+@router.patch("/orders/{order_id}/payment")
+def set_my_order_payment(order_id: str, body: PaymentUpdate,
+                         uid: str = Depends(get_current_customer_uid)):
+    db = get_db()
+    _my_order_or_404(db, order_id, uid)
+    updates = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update.")
+    if "paymentMethod" in updates and updates["paymentMethod"] not in ("gpay", "cod"):
+        raise HTTPException(status_code=400, detail="paymentMethod must be 'gpay' or 'cod'.")
+    updates["updatedAt"] = datetime.now(timezone.utc)
+    db.orders.update_one({"_id": oid(order_id)}, {"$set": updates})
+    return serialize(db.orders.find_one({"_id": oid(order_id)}))

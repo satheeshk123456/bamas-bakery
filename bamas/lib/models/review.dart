@@ -1,11 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Review {
   final String id;
   final String customerName;
   final double rating; // 1..5
   final String comment;
-  final Timestamp? createdAt;
+  final DateTime? createdAt;
 
   Review({
     required this.id,
@@ -20,7 +19,7 @@ class Review {
         customerName: map['customerName'] ?? 'Guest',
         rating: (map['rating'] ?? 5).toDouble(),
         comment: map['comment'] ?? '',
-        createdAt: map['createdAt'],
+        createdAt: _parseDate(map['createdAt']),
       );
 }
 
@@ -30,7 +29,7 @@ class Enquiry {
   final String phone;
   final String message;
   final bool handled;
-  final Timestamp? createdAt;
+  final DateTime? createdAt;
 
   Enquiry({
     required this.id,
@@ -47,6 +46,15 @@ class Enquiry {
         phone: map['phone'] ?? '',
         message: map['message'] ?? '',
         handled: map['handled'] ?? false,
-        createdAt: map['createdAt'],
+        createdAt: _parseDate(map['createdAt']),
       );
+}
+
+/// The backend sends dates as ISO8601 strings (Python `.isoformat()`).
+/// Anything unparseable becomes null rather than throwing while decoding.
+DateTime? _parseDate(dynamic value) {
+  if (value == null) return null;
+  if (value is DateTime) return value;
+  if (value is String) return DateTime.tryParse(value);
+  return null;
 }

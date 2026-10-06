@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../app_theme.dart';
 import '../models/review.dart';
-import '../services/firestore_service.dart';
+import '../services/api_service.dart';
 
 class ReviewsScreen extends StatefulWidget {
   final bool embedded;

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Plain HTTP is permitted ONLY for the backend server below.
+         Everything else still requires HTTPS, so this is a narrow
+         exception rather than switching cleartext on app-wide.
+         When the backend moves to https:// this whole file can be
+         deleted, along with the networkSecurityConfig line in the
+         AndroidManifest. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">52.62.189.19</domain>
+    </domain-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

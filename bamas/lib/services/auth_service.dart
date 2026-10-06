@@ -1,66 +1,93 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../app_config.dart';
 import '../models/app_user.dart';
 import '../models/order_model.dart';
-import 'firestore_service.dart';
+import 'api_service.dart';
 
-/// A minimal, Firebase-independent view of "who's signed in" — so demo
-/// mode (kDemoMode) can fake a signed-in user without ever touching
-/// Firebase Auth, same as the rest of the app fakes Firestore.
+/// A minimal view of "who's signed in". Kept deliberately independent of
+/// any auth provider so demo mode (kDemoMode) can fake a signed-in user.
 class AuthUser {
   final String uid;
   final String email;
   AuthUser({required this.uid, required this.email});
 }
 
-/// Thrown when the backend rejects a register/login/etc. call. Carries
-/// the human-readable message the backend already sent back.
+/// Thrown when the backend rejects a register/login call. Carries the
+/// human-readable message the backend already sent back.
 class AuthException implements Exception {
   final String message;
   AuthException(this.message);
 }
 
-/// All account functionality lives in bamas-admin-backend, not in this
-/// app: register, login and "forgot password" are POSTs to
-/// `$kApiBaseUrl/account/...`, and the backend does the real work (it
-/// creates the Firebase Auth user itself via the Admin SDK, checks
-/// passwords via Google's Identity Toolkit REST API, and writes/reads
-/// the users/{uid} profile doc and the customer's own orders).
+/// Accounts are handled entirely by bamas-admin-backend. Register and
+/// login are POSTs to `$kApiBaseUrl/account/...`; the backend checks the
+/// bcrypt password hash in MongoDB and returns its own JWT.
 ///
-/// The ONE thing that can't move server-side is establishing the actual
-/// signed-in session on this device — only the Firebase Auth *client*
-/// SDK can do that, so register/login end by handing the backend's
-/// custom token to `signInWithCustomToken`. That single call just
-/// adopts a session the backend already vouched for; it doesn't check
-/// anything itself. From then on, AuthService.authStateChanges() (used
-/// by AuthGate) reflects that session automatically.
+/// This app simply stores that JWT (in SharedPreferences, so the session
+/// survives an app restart) and sends it as `Authorization: Bearer ...`
+/// on customer requests. Firebase is no longer involved in identity at
+/// all — the app keeps Firebase only for FCM push notifications.
 class AuthService {
   AuthService._();
   static final AuthService instance = AuthService._();
 
-  final _firestore = FirestoreService();
+  static const _kTokenKey = 'auth_access_token';
+  static const _kUidKey = 'auth_uid';
+  static const _kEmailKey = 'auth_email';
 
-  // ---- demo mode state (kDemoMode == true) ----
-  AuthUser? _demoUser;
-  final _demoController = StreamController<AuthUser?>.broadcast();
+  String? _token;
+  AuthUser? _user;
+  bool _restored = false;
+  final _controller = StreamController<AuthUser?>.broadcast();
+
+  /// The stored JWT, or null when signed out. Other services (see
+  /// ApiService) use this to authenticate customer-only requests.
+  String? get token => _token;
+
+  /// Reloads any session saved on this device. Call once at startup,
+  /// before AuthGate decides which screen to show, otherwise a returning
+  /// customer is briefly shown the login screen.
+  Future<void> restoreSession() async {
+    if (_restored) return;
+    _restored = true;
+    if (kDemoMode) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString(_kTokenKey);
+      final uid = prefs.getString(_kUidKey);
+      if (token != null && uid != null) {
+        _token = token;
+        _user = AuthUser(uid: uid, email: prefs.getString(_kEmailKey) ?? '');
+      }
+    } catch (_) {
+      // Storage unavailable — treat as signed out rather than crashing.
+    }
+    _controller.add(_user);
+  }
+
+  Future<void> _persist(String token, String uid, String email) async {
+    _token = token;
+    _user = AuthUser(uid: uid, email: email);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kTokenKey, token);
+      await prefs.setString(_kUidKey, uid);
+      await prefs.setString(_kEmailKey, email);
+    } catch (_) {
+      // Session still works for this run even if it can't be saved.
+    }
+    _controller.add(_user);
+  }
 
   Stream<AuthUser?> authStateChanges() {
-    if (kDemoMode) {
-      Future.microtask(() => _demoController.add(_demoUser));
-      return _demoController.stream;
-    }
-    return fb.FirebaseAuth.instance.authStateChanges().map(
-        (u) => u == null ? null : AuthUser(uid: u.uid, email: u.email ?? ''));
+    Future.microtask(() => _controller.add(_user));
+    return _controller.stream;
   }
 
-  AuthUser? get currentUser {
-    if (kDemoMode) return _demoUser;
-    final u = fb.FirebaseAuth.instance.currentUser;
-    return u == null ? null : AuthUser(uid: u.uid, email: u.email ?? '');
-  }
+  AuthUser? get currentUser => _user;
 
   Future<void> register({
     required String name,
@@ -70,10 +97,8 @@ class AuthService {
   }) async {
     if (kDemoMode) {
       final uid = 'demo-${DateTime.now().millisecondsSinceEpoch}';
-      await _firestore.saveUserProfile(
-          uid: uid, name: name.trim(), phone: phone.trim(), email: email.trim());
-      _demoUser = AuthUser(uid: uid, email: email.trim());
-      _demoController.add(_demoUser);
+      _user = AuthUser(uid: uid, email: email.trim());
+      _controller.add(_user);
       return;
     }
 
@@ -90,19 +115,14 @@ class AuthService {
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw AuthException(_extractDetail(res, fallback: 'Could not create your account.'));
     }
-    final token = (jsonDecode(res.body) as Map)['customToken'] as String;
-    await fb.FirebaseAuth.instance.signInWithCustomToken(token);
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    await _persist(data['accessToken'] as String, data['uid'] as String, email.trim());
   }
 
   Future<void> login({required String email, required String password}) async {
     if (kDemoMode) {
-      final uid = _demoUser?.uid ?? 'demo-user';
-      // Make sure a profile exists no matter how demo mode was entered,
-      // so the Account screen always has something to show.
-      await _firestore.saveUserProfile(
-          uid: uid, name: 'Demo User', phone: '9999999999', email: email.trim());
-      _demoUser = AuthUser(uid: uid, email: email.trim());
-      _demoController.add(_demoUser);
+      _user = AuthUser(uid: _user?.uid ?? 'demo-user', email: email.trim());
+      _controller.add(_user);
       return;
     }
 
@@ -114,70 +134,65 @@ class AuthService {
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw AuthException(_extractDetail(res, fallback: 'Incorrect email or password.'));
     }
-    final token = (jsonDecode(res.body) as Map)['customToken'] as String;
-    await fb.FirebaseAuth.instance.signInWithCustomToken(token);
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    await _persist(data['accessToken'] as String, data['uid'] as String, email.trim());
   }
 
+  /// Password reset by email isn't available (it used to be Firebase's
+  /// mail service). The backend replies with a clear message telling the
+  /// customer to contact the shop, which is surfaced to them as-is.
   Future<void> resetPassword(String email) async {
-    if (kDemoMode) return; // nothing to reset in demo mode
-    await http.post(
+    if (kDemoMode) return;
+    final res = await http.post(
       Uri.parse('$kApiBaseUrl/account/forgot-password'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'email': email.trim()}),
     );
-    // The backend always reports success (so this endpoint can't be used
-    // to check which emails are registered) — nothing to branch on here.
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw AuthException(_extractDetail(res,
+          fallback: 'Please contact the shop to reset your password.'));
+    }
+  }
+
+  /// Called when the backend rejects our token (401). Clears the session
+  /// so AuthGate shows the login screen, rather than leaving the app
+  /// looking signed in while every request quietly fails.
+  Future<void> handleUnauthorized() async {
+    if (_token == null && _user == null) return;   // already signed out
+    await logout();
   }
 
   Future<void> logout() async {
-    if (kDemoMode) {
-      _demoUser = null;
-      _demoController.add(null);
-      return;
+    _token = null;
+    _user = null;
+    ApiService.clearCache();
+    if (!kDemoMode) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_kTokenKey);
+        await prefs.remove(_kUidKey);
+        await prefs.remove(_kEmailKey);
+      } catch (_) {
+        // Already cleared in memory; nothing else to do.
+      }
     }
-    // Purely local — there's no backend session to end, Firebase Auth's
-    // client SDK just clears/stops refreshing the token on this device.
-    await fb.FirebaseAuth.instance.signOut();
+    _controller.add(null);
   }
 
-  /// Reads the signed-in account's profile via GET /account/me. Used by
-  /// AccountScreen instead of a live Firestore stream now that the
-  /// backend, not this app, owns reading/writing users/{uid}.
+  /// GET /account/me
   Future<AppUser?> fetchProfile() async {
     final uid = currentUser?.uid;
     if (uid == null) return null;
-    if (kDemoMode) return _firestore.userProfileStream(uid).first;
-
-    final token = await fb.FirebaseAuth.instance.currentUser?.getIdToken();
-    if (token == null) return null;
-    final res = await http.get(
-      Uri.parse('$kApiBaseUrl/account/me'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
-    if (res.statusCode != 200) return null;
-    final data = jsonDecode(res.body) as Map<String, dynamic>;
-    return AppUser.fromMap(uid, data);
+    if (kDemoMode) return AppUser(uid: uid, name: 'Demo User', phone: '9999999999', email: _user!.email);
+    final data = await ApiService.instance.getMyProfile();
+    return data == null ? null : AppUser.fromMap(uid, data);
   }
 
-  /// Lists the signed-in account's own orders via GET /account/orders.
-  /// Used by OrderHistoryScreen instead of a live Firestore query now
-  /// that the backend owns reading orders by userId.
+  /// GET /account/orders
   Future<List<OrderModel>> fetchMyOrders() async {
-    final uid = currentUser?.uid;
-    if (uid == null) return [];
-    if (kDemoMode) return _firestore.myOrdersStream(uid).first;
-
-    final token = await fb.FirebaseAuth.instance.currentUser?.getIdToken();
-    if (token == null) return [];
-    final res = await http.get(
-      Uri.parse('$kApiBaseUrl/account/orders'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
-    if (res.statusCode != 200) return [];
-    final list = jsonDecode(res.body) as List;
-    return list
-        .map((m) => OrderModel.fromMap(m['id'] as String, m as Map<String, dynamic>))
-        .toList();
+    if (currentUser?.uid == null) return [];
+    if (kDemoMode) return [];
+    return ApiService.instance.myOrders();
   }
 
   String _extractDetail(http.Response res, {required String fallback}) {
@@ -185,7 +200,7 @@ class AuthService {
       final data = jsonDecode(res.body);
       if (data is Map && data['detail'] != null) return data['detail'].toString();
     } catch (_) {
-      // Body wasn't JSON (e.g. a raw 500 page) — fall through to fallback.
+      // Body wasn't JSON (e.g. a raw 500 page) — fall through.
     }
     return fallback;
   }
@@ -194,11 +209,6 @@ class AuthService {
   /// safe to show directly in a SnackBar.
   static String friendlyError(Object e) {
     if (e is AuthException) return e.message;
-    if (e is fb.FirebaseAuthException) {
-      // Can still happen from signInWithCustomToken itself (e.g. a
-      // network error, or a malformed/expired custom token).
-      return e.message ?? 'Something went wrong. Please try again.';
-    }
     return 'Something went wrong. Please try again.';
   }
 }

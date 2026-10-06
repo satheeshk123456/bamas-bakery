@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../app_theme.dart';
 import '../models/shop_settings.dart';
-import '../services/firestore_service.dart';
+import '../services/api_service.dart';
 
 /// Lets a customer send a question to the shop (bulk orders, catering,
 /// timings, complaints). Messages land in the admin panel's Enquiries

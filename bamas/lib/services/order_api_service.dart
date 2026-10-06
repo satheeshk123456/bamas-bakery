@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../app_config.dart';
+import 'branch_service.dart';
 import 'demo_data.dart';
 
 /// Places a new order via bamas-admin-backend instead of writing to
@@ -25,6 +26,10 @@ class OrderApiService {
     String? fcmToken,
     String? userId,
   }) async {
+    // Which branch has to cook and deliver this. The backend files the
+    // order against its default branch if this is missing, so an older
+    // build of the app never produces an order no manager can see.
+    final branchId = BranchService.instance.currentId;
     if (kDemoMode) {
       return DemoStore.createOrder(
         items: items,
@@ -32,7 +37,6 @@ class OrderApiService {
         customerName: customerName,
         customerPhone: customerPhone,
         address: address,
-        userId: userId,
       );
     }
 
@@ -48,7 +52,10 @@ class OrderApiService {
         'lat': lat,
         'lng': lng,
         'fcmToken': fcmToken,
+        // Ties the order to the signed-in customer so it shows up under
+        // "My Orders" and the backend can refuse anyone else reading it.
         'userId': userId,
+        if (branchId != null && branchId.isNotEmpty) 'branchId': branchId,
       }),
     );
 

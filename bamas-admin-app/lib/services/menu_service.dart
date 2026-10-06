@@ -13,20 +13,45 @@ class MenuService {
   }
 
   /// Categories to choose from when adding a new item (e.g. Burgers, Drinks).
-  Future<List<Category>> listCategories() async {
+  ///
+  /// [includeHidden] asks the backend for switched-off categories too --
+  /// the Categories screen needs them so a hidden one can be switched back
+  /// on, but the "Add item" dropdown must not offer them.
+  Future<List<Category>> listCategories({bool includeHidden = false}) async {
     if (kDemoMode) return demoCategories();
-    final result = await apiClient.get('/menu/categories');
+    final result = await apiClient.get(
+      '/menu/categories',
+      query: includeHidden ? {'includeInactive': 'true'} : null,
+    );
     return (result as List).map((e) => Category.fromJson((e as Map).cast<String, dynamic>())).toList();
+  }
+
+  /// Show or hide a category, or rename it. Hiding is the safe option:
+  /// the category disappears from the customer app straight away, and
+  /// nothing about its items or past orders changes.
+  Future<Category> updateCategory(String id, Map<String, dynamic> changes) async {
+    final result = await apiClient.patch('/menu/categories/$id', body: changes);
+    return Category.fromJson((result as Map).cast<String, dynamic>());
+  }
+
+  /// Delete for good. The backend refuses (409) while any item is still
+  /// filed under it, which is what stops items being orphaned.
+  Future<void> deleteCategory(String id) async {
+    await apiClient.delete('/menu/categories/$id');
   }
 
   /// Adds a brand-new item to the menu from the "Add menu item" screen.
   /// This is what makes it show up on the customer-facing `bamas` app's
   /// Menu tab — same `menuItems` collection, no reinstall needed.
+  /// [branchId] says which branch sells this item. An owner must choose
+  /// one; for a branch manager it is ignored and the backend substitutes
+  /// their own branch, so a manager cannot add items to someone else's shop.
   Future<MenuItem> createItem({
     required String name,
     required String description,
     required double price,
     required String categoryId,
+    String? branchId,
   }) async {
     if (kDemoMode) {
       return MenuItem(
@@ -43,6 +68,7 @@ class MenuService {
       'description': description,
       'price': price,
       'categoryId': categoryId,
+      if (branchId != null && branchId.isNotEmpty) 'branchId': branchId,
     });
     return MenuItem.fromJson((result as Map).cast<String, dynamic>());
   }

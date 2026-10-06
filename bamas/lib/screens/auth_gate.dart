@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import '../models/branch.dart';
 import '../services/auth_service.dart';
+import '../services/branch_service.dart';
+import 'branch_picker_screen.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 
@@ -19,7 +22,19 @@ class AuthGate extends StatelessWidget {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
-        return snap.data != null ? const HomeScreen() : const LoginScreen();
+        if (snap.data == null) return const LoginScreen();
+
+        // Signed in, but which shop? The menu, the prices and the payment
+        // QR all depend on the branch, so it has to be settled before the
+        // home screen -- and once chosen it is remembered on the device,
+        // so this is a one-time question, not a per-launch one.
+        return ValueListenableBuilder<Branch?>(
+          valueListenable: BranchService.instance.selected,
+          builder: (context, branch, _) {
+            if (branch == null) return const BranchPickerScreen();
+            return const HomeScreen();
+          },
+        );
       },
     );
   }

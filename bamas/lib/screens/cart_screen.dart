@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../app_theme.dart';
+import '../models/shop_settings.dart';
+import '../services/api_service.dart';
 import '../services/cart_provider.dart';
 import 'checkout_screen.dart';
 
@@ -114,35 +116,78 @@ class _CheckoutBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, -3))],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Total', style: Theme.of(context).textTheme.bodySmall),
-                  Text('₹${total.toStringAsFixed(0)}',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
-                ],
-              ),
+    // The home screen already shows a "we're closed" banner, but the
+    // checkout button sat here fully enabled underneath it -- so the
+    // banner's promise that "ordering is paused" simply was not true.
+    // This is the app-side half of that; the backend refuses a closed
+    // branch's orders outright, which is what actually enforces it for
+    // app versions already installed on customers' phones.
+    return StreamBuilder<ShopSettings>(
+      stream: FirestoreService().shopSettingsStream(),
+      builder: (context, snap) {
+        // Open until proven otherwise: a slow first response must never
+        // stop a customer who is allowed to order. The backend has the
+        // final say, so guessing "open" here is safe.
+        final isOpen = snap.data?.isOpen ?? true;
+
+        return Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, -3))],
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!isOpen)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      children: [
+                        Icon(Icons.schedule, size: 17, color: AppBranding.danger),
+                        SizedBox(width: 7),
+                        Expanded(
+                          child: Text(
+                            'Closed right now — your cart is saved, order when we reopen.',
+                            style: TextStyle(
+                              color: AppBranding.danger,
+                              fontSize: 12.5,
+                              height: 1.25,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Total', style: Theme.of(context).textTheme.bodySmall),
+                          Text('₹${total.toStringAsFixed(0)}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+                        ],
+                      ),
+                    ),
+                    ElevatedButton(
+                      onPressed: isOpen
+                          ? () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const CheckoutScreen()),
+                              )
+                          : null,
+                      child: Text(isOpen ? 'Proceed to Checkout' : 'Closed'),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const CheckoutScreen()),
-              ),
-              child: const Text('Proceed to Checkout'),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
